@@ -3,7 +3,22 @@ const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 const app = express()
 app.use(express.json())
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+let supabase
+let supabaseMock = false
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+} else {
+  supabaseMock = true
+  console.warn('[server] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing — using mock supabase (no writes)')
+  const api = {
+    async upsert() { return { data: [], error: null } },
+    async select() { return { data: [], error: null } },
+    eq() { return this },
+    limit() { return this },
+  }
+  supabase = { from() { return api } }
+}
 function toHour(ts) {
   const d = new Date(ts)
   d.setUTCMinutes(0, 0, 0)
