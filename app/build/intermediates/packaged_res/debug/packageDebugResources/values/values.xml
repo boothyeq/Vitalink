@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bannerGrantedAccent">#2E7D32</color>
+    <color name="bannerGrantedBg">#DFF0D8</color>
+    <color name="bannerRequiredAccent">#FFA000</color>
+    <color name="bannerRequiredBg">#FFF3CD</color>
+    <color name="btnDanger">#E53935</color>
+    <color name="btnOnDanger">#FFFFFF</color>
+    <color name="btnOnPrimary">#FFFFFF</color>
+    <color name="btnOutlineText">#1E88E5</color>
+    <color name="btnPrimary">#1E88E5</color>
+    <string name="app_name">Vitalink Connect</string>
+    <string name="availability_missing">Health Connect not available</string>
+    <string name="banner_desc_granted">You can now collect health data</string>
+    <string name="banner_desc_required">Grant access to collect health metrics</string>
+    <string name="banner_permissions_granted">Permissions Granted — You can now collect health data</string>
+    <string name="banner_permissions_missing">Grant permissions to collect health data</string>
+    <string name="banner_title_granted">Permissions Granted</string>
+    <string name="banner_title_required">Permissions Required</string>
+    <string name="collect_health_data">Collect Health Data</string>
+    <string name="export_data">Export Data</string>
+    <string name="grant_permissions">Grant Permissions</string>
+    <string name="read_steps">Read Steps</string>
+    <string name="scan_to_capture">Scan to Capture</string>
+    <string name="server_base_url">http://127.0.0.1:3001</string>
+    <string name="subtitle_manage_health">Collect and manage your health data</string>
+</resources>
