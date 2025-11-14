@@ -15,9 +15,9 @@ captures/
 *.aab
 *.jks
 *.keystore
-vitalink-web/server/node_modules/
-vitalink-web/server/.env
-vitalink-web/server/.npmrc
+vitalink/server/node_modules/
+vitalink/server/.env
+vitalink/server/.npmrc
 *.tmp
 *.bak
 ~*
