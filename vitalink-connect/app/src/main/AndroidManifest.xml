@@ -26,6 +26,9 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".LoginActivity"
+            android:exported="true"/>
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

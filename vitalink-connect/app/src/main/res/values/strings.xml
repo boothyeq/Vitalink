@@ -14,4 +14,8 @@
     <string name="banner_desc_required">Grant access to collect health metrics</string>
     <string name="banner_title_granted">Permissions Granted</string>
     <string name="banner_desc_granted">You can now collect health data</string>
+    <string name="hr_last_hour_no_samples">HR last hour: no samples</string>
+    <string name="hr_last_hour">HR last hour: min %1$d, max %2$d, avg %3$d</string>
+    <string name="hr_today_no_samples">HR today: no samples</string>
+    <string name="hr_today">HR today: min %1$d, max %2$d, avg %3$d</string>
 </resources>
