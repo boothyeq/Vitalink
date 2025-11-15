@@ -15,9 +15,9 @@ vitalink-connect/captures/
 *.aab
 *.jks
 *.keystore
-server/node_modules/
-server/.env
-server/.npmrc
+vitalink/server/node_modules/
+vitalink/server/.env
+vitalink/server/.npmrc
 *.tmp
 *.bak
 ~*

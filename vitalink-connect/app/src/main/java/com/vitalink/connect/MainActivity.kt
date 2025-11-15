@@ -41,7 +41,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var client: HealthConnectClient
     private lateinit var http: OkHttpClient
     private lateinit var baseUrl: String
-    private val patientId = "00000000-0000-0000-0000-000000000001"
+    private fun currentPatientId(): String {
+        val sp = getSharedPreferences("vitalink", android.content.Context.MODE_PRIVATE)
+        return sp.getString("patientId", null) ?: ""
+    }
     private val originId = "android_health_connect"
     private val permissions: Set<String> = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
@@ -83,6 +86,11 @@ class MainActivity : AppCompatActivity() {
         http = OkHttpClient.Builder().addInterceptor(interceptor).build()
         baseUrl = getString(R.string.server_base_url)
 
+        val pid = currentPatientId()
+        if (pid.isEmpty()) {
+            startActivity(android.content.Intent(this, LoginActivity::class.java))
+        }
+
         fun updateUiForPermissions(grantedSet: Set<String>) {
             val ok = grantedSet.containsAll(permissions)
             applyPermissionsUI(ok)
@@ -106,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnRead.setOnClickListener {
-            lifecycleScope.launch { readMetricsAndShow(txt); syncTodayToServer() }
+            lifecycleScope.launch { ensurePatientExists(); readMetricsAndShow(txt); updateLastHourHrLabel(); updateTodayHrLabel(); updateHrDiagnostics(); syncTodayToServer() }
         }
 
         val scanPreview = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
@@ -116,6 +124,10 @@ class MainActivity : AppCompatActivity() {
         btnScan.setOnClickListener { scanPreview.launch(null) }
         btnExport.setOnClickListener {
             android.widget.Toast.makeText(this, "Export coming soon", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<Button>(R.id.btnSwitchUser).setOnClickListener {
+            startActivity(android.content.Intent(this, LoginActivity::class.java))
         }
     }
 
@@ -144,6 +156,15 @@ class MainActivity : AppCompatActivity() {
             txtBannerTitle.text = getString(R.string.banner_title_required)
             txtBannerDesc.text = getString(R.string.banner_desc_required)
         }
+    }
+
+    private suspend fun ensurePatientExists() {
+        val pid = currentPatientId()
+        if (pid.isEmpty()) return
+        val json = "{\"patientId\":\"" + pid + "\"}"
+        val body = json.toRequestBody("application/json".toMediaType())
+        val req = Request.Builder().url(baseUrl + "/dev/ensure-patient").post(body).build()
+        withContext(Dispatchers.IO) { try { http.newCall(req).execute().close() } catch (_: Exception) {} }
     }
 
     private suspend fun readMetricsAndShow(txt: TextView) {
@@ -394,6 +415,120 @@ class MainActivity : AppCompatActivity() {
         txt.text = "Permissions granted"
     }
 
+    private suspend fun updateLastHourHrLabel() {
+        val tv = findViewById<TextView>(R.id.txtHrLastHour)
+        val granted = client.permissionController.getGrantedPermissions()
+        if (!granted.containsAll(permissions)) {
+            tv.text = getString(R.string.hr_last_hour_no_samples)
+            return
+        }
+        val nowInstant = Instant.now()
+        val start = nowInstant.minus(1, ChronoUnit.HOURS)
+        val hr = client.readRecords(
+            ReadRecordsRequest(
+                HeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, nowInstant)
+            )
+        ).records
+        var min = Long.MAX_VALUE
+        var max = Long.MIN_VALUE
+        var sum = 0L
+        var count = 0
+        hr.forEach { rec ->
+            rec.samples.forEach { s ->
+                val bpm = s.beatsPerMinute.toLong()
+                if (bpm < min) min = bpm
+                if (bpm > max) max = bpm
+                sum += bpm
+                count += 1
+            }
+        }
+        if (count == 0) {
+            tv.text = getString(R.string.hr_last_hour_no_samples)
+        } else {
+            val avg = (sum / count).toInt()
+            tv.text = getString(R.string.hr_last_hour, min.toInt(), max.toInt(), avg)
+        }
+    }
+
+    private suspend fun updateTodayHrLabel() {
+        val tv = findViewById<TextView>(R.id.txtHrToday)
+        val granted = client.permissionController.getGrantedPermissions()
+        if (!granted.containsAll(permissions)) {
+            tv.text = getString(R.string.hr_today_no_samples)
+            return
+        }
+        val nowInstant = Instant.now()
+        val zone = ZoneId.systemDefault()
+        val today = LocalDateTime.ofInstant(nowInstant, zone).toLocalDate()
+        val start = today.atStartOfDay(zone).toInstant()
+        val hr = client.readRecords(
+            ReadRecordsRequest(
+                HeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, nowInstant)
+            )
+        ).records
+        var min = Long.MAX_VALUE
+        var max = Long.MIN_VALUE
+        var sum = 0L
+        var count = 0
+        hr.forEach { rec ->
+            rec.samples.forEach { s ->
+                val bpm = s.beatsPerMinute.toLong()
+                if (bpm < min) min = bpm
+                if (bpm > max) max = bpm
+                sum += bpm
+                count += 1
+            }
+        }
+        if (count == 0) {
+            tv.text = getString(R.string.hr_today_no_samples)
+        } else {
+            val avg = (sum / count).toInt()
+            tv.text = getString(R.string.hr_today, min.toInt(), max.toInt(), avg)
+        }
+    }
+
+    private suspend fun updateHrDiagnostics() {
+        val tv = findViewById<TextView>(R.id.txtHrDiag)
+        val granted = client.permissionController.getGrantedPermissions()
+        if (!granted.containsAll(permissions)) {
+            tv.text = getString(R.string.hr_diag, 0, 0, "-")
+            return
+        }
+        val nowInstant = Instant.now()
+        val zone = ZoneId.systemDefault()
+        val today = LocalDateTime.ofInstant(nowInstant, zone).toLocalDate()
+        val startToday = today.atStartOfDay(zone).toInstant()
+        val start7d = nowInstant.minusSeconds(7 * 24 * 60 * 60)
+        val fmt = DateTimeFormatter.ofPattern("dd/MM HH:mm")
+        val hrToday = client.readRecords(
+            ReadRecordsRequest(
+                HeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startToday, nowInstant)
+            )
+        ).records
+        val hr7d = client.readRecords(
+            ReadRecordsRequest(
+                HeartRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start7d, nowInstant)
+            )
+        ).records
+        var todayCount = 0
+        var weekCount = 0
+        var lastTs: LocalDateTime? = null
+        hrToday.forEach { rec ->
+            todayCount += rec.samples.size
+            rec.samples.forEach { s ->
+                val t = LocalDateTime.ofInstant(s.time, zone)
+                if (lastTs == null || t.isAfter(lastTs)) lastTs = t
+            }
+        }
+        hr7d.forEach { rec -> weekCount += rec.samples.size }
+        val lastStr = if (lastTs != null) lastTs!!.format(fmt) else "-"
+        tv.text = getString(R.string.hr_diag, todayCount, weekCount, lastStr)
+    }
+
     private suspend fun syncTodayToServer() {
         val granted = client.permissionController.getGrantedPermissions()
         if (!granted.containsAll(permissions)) return
@@ -447,6 +582,7 @@ class MainActivity : AppCompatActivity() {
         ).records
         val deviceId = Build.MODEL ?: "device"
         val offsetMin = zone.rules.getOffset(nowInstant).totalSeconds / 60
+        val patientId = currentPatientId().ifEmpty { "Mi-User-01" }
         val stepsItems = stepsToday.map { r ->
             val start = r.startTime
             val end = r.endTime

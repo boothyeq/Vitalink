@@ -95,6 +95,79 @@ app.post('/dev/db-check', async (req, res) => {
   out.devices_select = { count: (d1.data || []).length, error: d1.error ? d1.error.message : null }
   return res.status(200).json(out)
 })
+app.post('/dev/reset-two-users', async (req, res) => {
+  const users = (req.body && req.body.users) || ['Mi-User-01', 'Fitbit-User-01']
+  const out = { users }
+  if (supabaseMock) {
+    out.mock = true
+    return res.status(200).json(out)
+  }
+  const tables = [
+    'steps_event', 'steps_hour', 'steps_day',
+    'hr_sample', 'hr_hour', 'hr_day',
+    'spo2_sample', 'spo2_hour', 'spo2_day',
+    'devices'
+  ]
+  for (const t of tables) {
+    const del = await supabase.from(t).delete().in('patient_id', users)
+    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
+  }
+  const delp = await supabase.from('patients').delete().in('patient_id', users)
+  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
+  const rows = users.map((u, i) => ({ patient_id: u, first_name: u.split('-')[0], last_name: String(i + 1), dob: '1970-01-01' }))
+  const ins = await supabase.from('patients').upsert(rows, { onConflict: 'patient_id' })
+  out.patients_upsert = { count: (ins.data || []).length, error: ins.error ? ins.error.message : null }
+  return res.status(200).json(out)
+})
+app.get('/dev/reset-two-users', async (req, res) => {
+  const users = ['Mi-User-01', 'Fitbit-User-01']
+  const out = { users }
+  if (supabaseMock) {
+    out.mock = true
+    return res.status(200).json(out)
+  }
+  const tables = [
+    'steps_event', 'steps_hour', 'steps_day',
+    'hr_sample', 'hr_hour', 'hr_day',
+    'spo2_sample', 'spo2_hour', 'spo2_day',
+    'devices'
+  ]
+  for (const t of tables) {
+    const del = await supabase.from(t).delete().in('patient_id', users)
+    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
+  }
+  const delp = await supabase.from('patients').delete().in('patient_id', users)
+  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
+  const rows = users.map((u, i) => ({ patient_id: u, first_name: u.split('-')[0], last_name: String(i + 1), dob: '1970-01-01' }))
+  const ins = await supabase.from('patients').upsert(rows, { onConflict: 'patient_id' })
+  out.patients_upsert = { count: (ins.data || []).length, error: ins.error ? ins.error.message : null }
+  return res.status(200).json(out)
+})
+app.get('/admin/users', async (req, res) => {
+  const out = { users: [] }
+  const rows = await supabase.from('patients').select('patient_id').limit(1000)
+  if (rows.error) return res.status(400).json({ error: rows.error.message })
+  out.users = (rows.data || []).map((r) => r.patient_id)
+  return res.status(200).json(out)
+})
+app.get('/admin/summary', async (req, res) => {
+  const users = await supabase.from('patients').select('patient_id').limit(1000)
+  if (users.error) return res.status(400).json({ error: users.error.message })
+  const ids = (users.data || []).map((r) => r.patient_id)
+  const out = []
+  for (const pid of ids) {
+    const s = await supabase.from('steps_day').select('date,steps_total').eq('patient_id', pid).order('date', { ascending: false }).limit(1)
+    const h = await supabase.from('hr_day').select('date,hr_min,hr_max,hr_avg,hr_count').eq('patient_id', pid).order('date', { ascending: false }).limit(1)
+    const o = await supabase.from('spo2_day').select('date,spo2_min,spo2_max,spo2_avg,spo2_count').eq('patient_id', pid).order('date', { ascending: false }).limit(1)
+    out.push({
+      patientId: pid,
+      steps: (s.data && s.data[0]) || null,
+      hr: (h.data && h.data[0]) || null,
+      spo2: (o.data && o.data[0]) || null,
+    })
+  }
+  return res.status(200).json({ summary: out })
+})
 app.post('/ingest/steps-events', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
   console.log('POST /ingest/steps-events', { count: items.length })
