@@ -18,6 +18,8 @@ vitalink-connect/captures/
 vitalink/server/node_modules/
 vitalink/server/.env
 vitalink/server/.npmrc
+vitalink/web/node_modules/
+vitalink/web/.env
 *.tmp
 *.bak
 ~*
