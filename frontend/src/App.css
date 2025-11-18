@@ -1,0 +1,234 @@
+/* FILE: frontend/src/App.css */
+
+.App {
+  text-align: center;
+}
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  margin-bottom: 2rem;
+}
+
+/* --- Capture Screen Styles --- */
+.camera-container {
+  position: relative;
+  width: 80%;
+  max-width: 640px;
+  margin: 2rem auto;
+  border: 2px solid #ccc;
+}
+.webcam {
+  width: 100%;
+  height: auto;
+}
+.roi-overlay-auto {
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+  border: 3px dashed rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.instructions {
+  position: absolute;
+  bottom: 10px;
+  width: 100%;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 5px 0;
+  margin: 0;
+}
+.controls {
+  margin-top: 1.5rem;
+}
+.controls button {
+  font-size: 1.2rem;
+  padding: 10px 20px;
+  cursor: pointer;
+  margin: 0.5rem;
+}
+.controls p {
+  margin: 1rem 0;
+}
+.controls input {
+  margin-top: 0.5rem;
+}
+.cancel-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.cancel-btn:hover {
+  background-color: #5a6268;
+}
+
+/* --- Preview Screen Styles --- */
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+}
+.preview-image {
+  max-width: 90%;
+  max-height: 50vh;
+  border: 2px solid #ccc;
+  margin-top: 1rem;
+}
+.preview-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+.preview-controls button {
+    font-size: 1.2rem;
+    padding: 10px 20px;
+    cursor: pointer;
+}
+
+/* --- Manual Entry Form Styles --- */
+.manual-entry-container {
+  max-width: 450px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  text-align: left;
+}
+.manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.form-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.form-group label {
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-right: 1rem;
+}
+.form-group input, .form-group select {
+  padding: 8px;
+  font-size: 1.1rem;
+  width: 150px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.form-group-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1.1rem;
+}
+.form-group-checkbox input {
+    width: 20px;
+    height: 20px;
+}
+.form-group-textarea {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 1.1rem;
+}
+.form-group-textarea textarea {
+    padding: 8px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 80px;
+}
+.manual-form-controls {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+.manual-form-controls button {
+  font-size: 1rem;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+
+/* --- Results Screen Styles --- */
+.results-container {
+  margin-top: 2rem;
+}
+.results-container button {
+  margin-top: 1.5rem;
+  font-size: 1.2rem;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.results {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  display: inline-block;
+  min-width: 200px;
+}
+.results h2 {
+  margin-top: 0;
+}
+.results p {
+  font-size: 1.2rem;
+  margin: 0.5rem 0;
+  text-align: left;
+}
+.annotated-image-container {
+  margin-bottom: 1.5rem;
+}
+.annotated-image {
+  max-width: 90%;
+  max-height: 40vh;
+  border: 2px solid #007bff;
+  margin-top: 0.5rem;
+}
+
+/* --- General & Error Styles --- */
+.loader {
+  font-size: 1.5rem;
+  color: #007bff;
+  margin-top: 1rem;
+}
+.error-container {
+  margin: 1.5rem auto 0 auto;
+  padding: 1rem;
+  border: 1px solid red;
+  background-color: #fff0f0;
+  max-width: 90%;
+  width: 640px;
+}
+.error {
+  color: red;
+  font-weight: bold;
+}
+.debug-image-container {
+  margin: 1.5rem auto;
+  padding: 1rem;
+  border: 2px solid red;
+  background-color: #fff0f0;
+  max-width: 90%;
+  width: 640px;
+}
+.debug-image-container h3 {
+  margin-top: 0;
+  color: #d00;
+}
+.debug-image {
+  max-width: 100%;
+  border: 1px solid #ccc;
+  background-color: white;
+}
