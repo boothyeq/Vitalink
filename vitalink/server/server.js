@@ -26,18 +26,6 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
   }
   supabase = { from() { return api } }
 }
-function toHour(ts) {
-  const d = new Date(ts)
-  d.setUTCMinutes(0, 0, 0)
-  return d.toISOString()
-}
-function toDate(ts) {
-  const d = new Date(ts)
-  const y = d.getUTCFullYear()
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 function toHourWithOffset(ts, offsetMin) {
   const d = new Date(Date.parse(ts) + (offsetMin || 0) * 60000)
   d.setUTCMinutes(0, 0, 0)
@@ -81,7 +69,7 @@ async function ensureDevices(devices, patientId) {
   return { ok: true }
 }
 app.get('/health', (req, res) => res.status(200).send('ok'))
-app.post('/dev/ensure-patient', async (req, res) => {
+app.post('/admin/ensure-patient', async (req, res) => {
   const pid = req.body && req.body.patientId
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
   const r = await ensurePatient(pid)
@@ -89,67 +77,14 @@ app.post('/dev/ensure-patient', async (req, res) => {
   return res.status(200).json({ ok: true })
 })
 
-app.post('/dev/db-check', async (req, res) => {
-  const pid = (req.body && req.body.patientId) || '00000000-0000-0000-0000-000000000001'
-  const out = { patientId: pid }
-  const en = await ensurePatient(pid)
-  out.ensurePatient = en
-  const p1 = await supabase.from('patients').select('id').eq('id', pid).limit(1)
-  out.patients_select = { count: (p1.data || []).length, error: p1.error ? p1.error.message : null }
-  const p2 = await supabase.from('patient').select('id').eq('id', pid).limit(1)
-  out.patient_select = { count: (p2.data || []).length, error: p2.error ? p2.error.message : null }
-  const d1 = await supabase.from('devices').select('device_id,patient_id').eq('patient_id', pid).limit(1)
-  out.devices_select = { count: (d1.data || []).length, error: d1.error ? d1.error.message : null }
-  return res.status(200).json(out)
-})
-app.post('/dev/reset-two-users', async (req, res) => {
-  const users = (req.body && req.body.users) || ['Mi-User-01', 'Fitbit-User-01']
-  const out = { users }
-  if (supabaseMock) {
-    out.mock = true
-    return res.status(200).json(out)
+if (process.env.ENABLE_DEV_ROUTES === 'true') {
+  try {
+    require('./dev/devRoutes')(app, supabase, ensurePatient, supabaseMock)
+  } catch (e) {
+    console.warn('dev routes not loaded', e && e.message ? e.message : e)
   }
-  const tables = [
-    'steps_event', 'steps_hour', 'steps_day',
-    'hr_sample', 'hr_hour', 'hr_day',
-    'spo2_sample', 'spo2_hour', 'spo2_day',
-    'devices'
-  ]
-  for (const t of tables) {
-    const del = await supabase.from(t).delete().in('patient_id', users)
-    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
-  }
-  const delp = await supabase.from('patients').delete().in('patient_id', users)
-  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
-  const rows = users.map((u, i) => ({ patient_id: u, first_name: u.split('-')[0], last_name: String(i + 1), dob: '1970-01-01' }))
-  const ins = await supabase.from('patients').upsert(rows, { onConflict: 'patient_id' })
-  out.patients_upsert = { count: (ins.data || []).length, error: ins.error ? ins.error.message : null }
-  return res.status(200).json(out)
-})
-app.get('/dev/reset-two-users', async (req, res) => {
-  const users = ['Mi-User-01', 'Fitbit-User-01']
-  const out = { users }
-  if (supabaseMock) {
-    out.mock = true
-    return res.status(200).json(out)
-  }
-  const tables = [
-    'steps_event', 'steps_hour', 'steps_day',
-    'hr_sample', 'hr_hour', 'hr_day',
-    'spo2_sample', 'spo2_hour', 'spo2_day',
-    'devices'
-  ]
-  for (const t of tables) {
-    const del = await supabase.from(t).delete().in('patient_id', users)
-    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
-  }
-  const delp = await supabase.from('patients').delete().in('patient_id', users)
-  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
-  const rows = users.map((u, i) => ({ patient_id: u, first_name: u.split('-')[0], last_name: String(i + 1), dob: '1970-01-01' }))
-  const ins = await supabase.from('patients').upsert(rows, { onConflict: 'patient_id' })
-  out.patients_upsert = { count: (ins.data || []).length, error: ins.error ? ins.error.message : null }
-  return res.status(200).json(out)
-})
+}
+
 app.get('/admin/users', async (req, res) => {
   const out = { users: [] }
   const rows = await supabase.from('patients').select('patient_id').limit(1000)
@@ -175,9 +110,186 @@ app.get('/admin/summary', async (req, res) => {
   }
   return res.status(200).json({ summary: out })
 })
+app.get('/admin/auth-users', async (req, res) => {
+  const r = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const users = (r.data && r.data.users) || []
+  const out = users.map((u) => ({ id: u.id, email: u.email, created_at: u.created_at, role: (u.app_metadata && u.app_metadata.role) || null }))
+  return res.status(200).json({ users: out })
+})
+app.post('/admin/auth-generate-link', async (req, res) => {
+  const email = req.body && req.body.email
+  if (!email) return res.status(400).json({ error: 'missing email' })
+  const redirect = (req.body && req.body.redirect) || undefined
+  const r = await supabase.auth.admin.generateLink({ type: 'magiclink', email, redirectTo: redirect })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const data = r.data || {}
+  const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
+  const fragment = actionLink.split('#')[1]
+  const base = redirect || 'http://localhost:5173/auth/callback'
+  const callback_link = fragment ? `${base}#${fragment}` : null
+  let verify_link = null
+  if (!callback_link && actionLink.includes('redirect_to=')) {
+    const u = new URL(actionLink)
+    u.searchParams.set('redirect_to', base)
+    verify_link = u.toString()
+  }
+  return res.status(200).json({ data, callback_link, verify_link })
+})
+app.get('/admin/auth-generate-link', async (req, res) => {
+  const email = req.query && req.query.email
+  if (!email) return res.status(400).json({ error: 'missing email' })
+  const type = (req.query && req.query.type) || 'magiclink'
+  const redirect = (req.query && req.query.redirect) || undefined
+  const r = await supabase.auth.admin.generateLink({ type, email, redirectTo: redirect })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const data = r.data || {}
+  if (!data.action_link && type === 'magiclink') {
+    const r2 = await supabase.auth.admin.generateLink({ type: 'recovery', email, redirectTo: redirect })
+    const d2 = r2.data || {}
+    const frag2 = (d2.action_link || '').split('#')[1]
+    const base2 = redirect || 'http://localhost:5173/auth/callback'
+    const callback_link2 = frag2 ? `${base2}#${frag2}` : null
+    return res.status(200).json({ data: d2, callback_link: callback_link2 })
+  }
+  const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
+  const fragment = actionLink.split('#')[1]
+  const base = redirect || 'http://localhost:5173/auth/callback'
+  const callback_link = fragment ? `${base}#${fragment}` : null
+  let verify_link = null
+  if (!callback_link && actionLink.includes('redirect_to=')) {
+    const u = new URL(actionLink)
+    u.searchParams.set('redirect_to', base)
+    verify_link = u.toString()
+  }
+  return res.status(200).json({ data, callback_link, verify_link })
+})
+app.post('/admin/create-user', async (req, res) => {
+  const email = req.body && req.body.email
+  const password = req.body && req.body.password
+  const role = (req.body && req.body.role) || 'patient'
+  if (!email || !password) return res.status(400).json({ error: 'missing email or password' })
+  const r = await supabase.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { role } })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const user = r.data && r.data.user
+  if (role === 'patient' && user && user.id) {
+    await ensurePatient(user.id)
+  }
+  return res.status(200).json({ user: { id: user.id, email: user.email }, role })
+})
+app.post('/admin/promote', async (req, res) => {
+  const email = req.body && req.body.email
+  const role = (req.body && req.body.role) || 'admin'
+  if (!email) return res.status(400).json({ error: 'missing email' })
+  const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+  if (list.error) return res.status(400).json({ error: list.error.message })
+  const users = (list.data && list.data.users) || []
+  const u = users.find((x) => x.email === email)
+  if (!u) return res.status(404).json({ error: 'user not found' })
+  const upd = await supabase.auth.admin.updateUserById(u.id, { app_metadata: { role } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: u.id, email: u.email, role })
+})
+
+async function deletePatientCascade(pid) {
+  const out = {}
+  const tables = [
+    'steps_event', 'steps_hour', 'steps_day',
+    'hr_sample', 'hr_hour', 'hr_day',
+    'spo2_sample', 'spo2_hour', 'spo2_day',
+    'devices'
+  ]
+  for (const t of tables) {
+    const del = await supabase.from(t).delete().eq('patient_id', pid)
+    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
+  }
+  const delp = await supabase.from('patients').delete().eq('patient_id', pid)
+  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
+  return out
+}
+
+app.post('/admin/delete-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  const cascade = !!(req.body && req.body.cascade)
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  if (!uid && email) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+  }
+  const del = await supabase.auth.admin.deleteUser(uid)
+  if (del.error) return res.status(400).json({ error: del.error.message })
+  let cascade_result = null
+  if (cascade) {
+    cascade_result = await deletePatientCascade(uid)
+  }
+  return res.status(200).json({ ok: true, id: uid, cascade: cascade_result })
+})
+
+app.post('/admin/ban-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  const duration = (req.body && req.body.duration) || 'forever'
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  if (!uid && email) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+  }
+  const upd = await supabase.auth.admin.updateUserById(uid, { ban_duration: duration, app_metadata: { deleted: true } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: uid, ban_duration: duration })
+})
+
+app.post('/admin/anonymize-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  let currentEmail = email
+  if (!uid || !currentEmail) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = uid ? users.find((x) => x.id === uid) : users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+    currentEmail = u.email
+  }
+  const ts = Date.now()
+  const anonym = `deleted+${uid}+${ts}@example.invalid`
+  const upd = await supabase.auth.admin.updateUserById(uid, { email: anonym, app_metadata: { deleted: true, role: null } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: uid, old_email: currentEmail, new_email: anonym })
+})
+
+app.post('/admin/delete-patient', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const result = await deletePatientCascade(pid)
+  return res.status(200).json({ ok: true, patientId: pid, result })
+})
+
+app.post('/admin/update-email', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  if (!id || !email) return res.status(400).json({ error: 'missing id or email' })
+  const upd = await supabase.auth.admin.updateUserById(id, { email, email_confirm: true })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id, email })
+})
 app.post('/ingest/steps-events', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  console.log('POST /ingest/steps-events', { count: items.length })
+  // console.log('POST /ingest/steps-events', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
@@ -237,7 +349,7 @@ app.post('/ingest/steps-events', async (req, res) => {
 })
 app.post('/ingest/hr-samples', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  console.log('POST /ingest/hr-samples', { count: items.length })
+  // console.log('POST /ingest/hr-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
@@ -308,7 +420,7 @@ app.post('/ingest/hr-samples', async (req, res) => {
 })
 app.post('/ingest/spo2-samples', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  console.log('POST /ingest/spo2-samples', { count: items.length })
+  // console.log('POST /ingest/spo2-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]

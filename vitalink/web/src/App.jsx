@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
+import AuthCallback from './pages/AuthCallback'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -14,10 +15,12 @@ function App() {
     return () => { data.subscription.unsubscribe() }
   }, [])
   const navigate = useNavigate()
+  const ENABLE_DEV = import.meta.env.VITE_ENABLE_DEV_PAGES === 'true'
+  const AdminOtpLazy = ENABLE_DEV ? React.lazy(() => import('./pages-dev/AdminOtp')) : null
   return (
     <div>
       <nav>
-        <Link to="/">Home</Link> | <Link to="/register">Register</Link> | <Link to="/login">Login</Link> | <Link to="/admin/login">Admin Login</Link> | <Link to="/admin">Admin Dashboard</Link>
+        <Link to="/">Home</Link> | <Link to="/register">Register</Link> | <Link to="/login">Login</Link> | <Link to="/admin/login">Admin Login</Link> {ENABLE_DEV ? <> | <Link to="/admin/otp">Admin OTP</Link></> : null} | <Link to="/admin">Admin Dashboard</Link>
         {session ? <button onClick={async()=>{ await supabase.auth.signOut(); navigate('/') }}>Logout</button> : null}
       </nav>
       <Routes>
@@ -25,7 +28,9 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminDashboard session={session} />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        {ENABLE_DEV ? <Route path="/admin/otp" element={<React.Suspense fallback={<div>Loading...</div>}><AdminOtpLazy /></React.Suspense>} /> : null}
+        <Route path="/admin" element={<AdminDashboard /* session={session} */ />} />
       </Routes>
     </div>
   )
