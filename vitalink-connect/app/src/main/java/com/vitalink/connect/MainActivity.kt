@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity() {
         if (pid.isEmpty()) return
         val json = "{\"patientId\":\"" + pid + "\"}"
         val body = json.toRequestBody("application/json".toMediaType())
-        val req = Request.Builder().url(baseUrl + "/dev/ensure-patient").post(body).build()
+        val req = Request.Builder().url(baseUrl + "/admin/ensure-patient").post(body).build()
         withContext(Dispatchers.IO) { try { http.newCall(req).execute().close() } catch (_: Exception) {} }
     }
 
@@ -555,7 +555,54 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (!reachable) {
-            txt.text = "server unreachable"
+            val nowInstant = Instant.now()
+            val zone = ZoneId.systemDefault()
+            val today = LocalDateTime.ofInstant(nowInstant, zone).toLocalDate()
+            val startOfToday = today.atStartOfDay(zone).toInstant()
+            val stepsToday = client.readRecords(
+                ReadRecordsRequest(
+                    StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
+                )
+            ).records
+            val hrToday = client.readRecords(
+                ReadRecordsRequest(
+                    HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
+                )
+            ).records
+            val spo2Today = client.readRecords(
+                ReadRecordsRequest(
+                    OxygenSaturationRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
+                )
+            ).records
+            val deviceId = Build.MODEL ?: "device"
+            val offsetMin = zone.rules.getOffset(nowInstant).totalSeconds / 60
+            val patientId = currentPatientId()
+            if (patientId.isEmpty()) { txt.text = "login required"; return }
+            val db = LocalDb.get(this)
+            val dao = db.dao()
+            withContext(Dispatchers.IO) {
+                stepsToday.forEach { r ->
+                    val start = r.startTime; val end = r.endTime
+                    val uid = patientId + "|" + originId + "|" + deviceId + "|" + start.toEpochMilli() + "|" + end.toEpochMilli() + "|" + r.count
+                    dao.insertSteps(PendingSteps(uid, patientId, originId, deviceId, start.toString(), end.toString(), r.count, offsetMin))
+                }
+                hrToday.forEach { rec ->
+                    rec.samples.forEach { s ->
+                        val t = s.time
+                        val uid = patientId + "|" + originId + "|" + deviceId + "|" + t.toEpochMilli() + "|" + s.beatsPerMinute
+                        dao.insertHr(PendingHr(uid, patientId, originId, deviceId, t.toString(), s.beatsPerMinute, offsetMin))
+                    }
+                }
+                spo2Today.forEach { r ->
+                    val t = r.time
+                    val uid = patientId + "|" + originId + "|" + deviceId + "|" + t.toEpochMilli() + "|" + r.percentage.value
+                    dao.insertSpo2(PendingSpo2(uid, patientId, originId, deviceId, t.toString(), r.percentage.value, offsetMin))
+                }
+            }
+            txt.text = "queued offline"
             return
         }
         val nowInstant = Instant.now()
@@ -582,7 +629,11 @@ class MainActivity : AppCompatActivity() {
         ).records
         val deviceId = Build.MODEL ?: "device"
         val offsetMin = zone.rules.getOffset(nowInstant).totalSeconds / 60
-        val patientId = currentPatientId().ifEmpty { "Mi-User-01" }
+        val patientId = currentPatientId()
+        if (patientId.isEmpty()) {
+            txt.text = "login required"
+            return
+        }
         val stepsItems = stepsToday.map { r ->
             val start = r.startTime
             val end = r.endTime
@@ -614,6 +665,33 @@ class MainActivity : AppCompatActivity() {
                         "\"tzOffsetMin\":" + offsetMin +
                     "}"
                 )
+            }
+        }
+        if (hrItems.isEmpty()) {
+            val nowInstant2 = Instant.now()
+            val start24h = nowInstant2.minus(24, ChronoUnit.HOURS)
+            val hr24h = client.readRecords(
+                ReadRecordsRequest(
+                    HeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(start24h, nowInstant2)
+                )
+            ).records
+            hr24h.forEach { rec ->
+                rec.samples.forEach { s ->
+                    val t = s.time
+                    val uid = patientId + "|" + originId + "|" + deviceId + "|" + t.toEpochMilli() + "|" + s.beatsPerMinute
+                    hrItems.add(
+                        "{" +
+                            "\"patientId\":\"" + patientId + "\"," +
+                            "\"originId\":\"" + originId + "\"," +
+                            "\"deviceId\":\"" + deviceId + "\"," +
+                            "\"timeTs\":\"" + t.toString() + "\"," +
+                            "\"bpm\":" + s.beatsPerMinute + "," +
+                            "\"recordUid\":\"" + uid + "\"," +
+                            "\"tzOffsetMin\":" + offsetMin +
+                        "}"
+                    )
+                }
             }
         }
         val spo2Items = spo2Today.map { r ->
@@ -656,7 +734,12 @@ class MainActivity : AppCompatActivity() {
             try {
                 val resp = http.newCall(hrReq).execute()
                 resp.use {
-                    status = status + "; hr=" + hrCount + ", code=" + it.code
+                    if (it.code == 200) {
+                        status = status + "; hr=" + hrCount + ", code=200"
+                    } else {
+                        val err = try { it.body?.string() ?: "" } catch (_: Exception) { "" }
+                        status = status + "; hr=" + hrCount + ", code=" + it.code + if (err.isNotEmpty()) ", msg=" + err else ""
+                    }
                 }
             } catch (_: Exception) {
                 status = status + "; hr=" + hrCount + ", error"
@@ -669,6 +752,66 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 status = status + "; spo2=" + spo2Count + ", error"
             }
+            try {
+                val db = LocalDb.get(this@MainActivity)
+                val dao = db.dao()
+                val jsonType = "application/json".toMediaType()
+                val queuedSteps = dao.getSteps(500)
+                if (queuedSteps.isNotEmpty()) {
+                    val payload = queuedSteps.map { i ->
+                        "{" +
+                            "\"patientId\":\"" + i.patientId + "\"," +
+                            "\"originId\":\"" + i.originId + "\"," +
+                            "\"deviceId\":\"" + i.deviceId + "\"," +
+                            "\"startTs\":\"" + i.startTs + "\"," +
+                            "\"endTs\":\"" + i.endTs + "\"," +
+                            "\"count\":" + i.count + "," +
+                            "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"tzOffsetMin\":" + i.tzOffsetMin +
+                        "}"
+                    }
+                    val body = ("[" + payload.joinToString(",") + "]").toRequestBody(jsonType)
+                    val req = Request.Builder().url(baseUrl + "/ingest/steps-events").post(body).build()
+                    val resp = http.newCall(req).execute()
+                    resp.use { if (it.code == 200) dao.deleteSteps(queuedSteps.map { q -> q.recordUid }) }
+                }
+                val queuedHr = dao.getHr(1000)
+                if (queuedHr.isNotEmpty()) {
+                    val payload = queuedHr.map { i ->
+                        "{" +
+                            "\"patientId\":\"" + i.patientId + "\"," +
+                            "\"originId\":\"" + i.originId + "\"," +
+                            "\"deviceId\":\"" + i.deviceId + "\"," +
+                            "\"timeTs\":\"" + i.timeTs + "\"," +
+                            "\"bpm\":" + i.bpm + "," +
+                            "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"tzOffsetMin\":" + i.tzOffsetMin +
+                        "}"
+                    }
+                    val body = ("[" + payload.joinToString(",") + "]").toRequestBody(jsonType)
+                    val req = Request.Builder().url(baseUrl + "/ingest/hr-samples").post(body).build()
+                    val resp = http.newCall(req).execute()
+                    resp.use { if (it.code == 200) dao.deleteHr(queuedHr.map { q -> q.recordUid }) }
+                }
+                val queuedSpo2 = dao.getSpo2(1000)
+                if (queuedSpo2.isNotEmpty()) {
+                    val payload = queuedSpo2.map { i ->
+                        "{" +
+                            "\"patientId\":\"" + i.patientId + "\"," +
+                            "\"originId\":\"" + i.originId + "\"," +
+                            "\"deviceId\":\"" + i.deviceId + "\"," +
+                            "\"timeTs\":\"" + i.timeTs + "\"," +
+                            "\"spo2Pct\":" + i.spo2Pct + "," +
+                            "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"tzOffsetMin\":" + i.tzOffsetMin +
+                        "}"
+                    }
+                    val body = ("[" + payload.joinToString(",") + "]").toRequestBody(jsonType)
+                    val req = Request.Builder().url(baseUrl + "/ingest/spo2-samples").post(body).build()
+                    val resp = http.newCall(req).execute()
+                    resp.use { if (it.code == 200) dao.deleteSpo2(queuedSpo2.map { q -> q.recordUid }) }
+                }
+            } catch (_: Exception) {}
         }
         txt.text = status
     }

@@ -2,7 +2,7 @@ const express = require('express')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
@@ -25,6 +25,22 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     limit() { return this },
   }
   supabase = { from() { return api } }
+}
+
+async function validatePatientId(patientId) {
+  if (!patientId) return { ok: false, error: 'missing patientId' }
+  if (supabaseMock) return { ok: true }
+  try {
+    const r = await supabase.auth.admin.getUserById(patientId)
+    if (r.error) return { ok: false, error: r.error.message }
+    const u = r.data && r.data.user
+    if (!u) return { ok: false, error: 'user not found' }
+    const role = (u.app_metadata && u.app_metadata.role) || null
+    if (role !== 'patient') return { ok: false, error: 'user is not patient' }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) }
+  }
 }
 function toHourWithOffset(ts, offsetMin) {
   const d = new Date(Date.parse(ts) + (offsetMin || 0) * 60000)
@@ -292,6 +308,8 @@ app.post('/ingest/steps-events', async (req, res) => {
   // console.log('POST /ingest/steps-events', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)
@@ -352,6 +370,8 @@ app.post('/ingest/hr-samples', async (req, res) => {
   // console.log('POST /ingest/hr-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)
@@ -423,6 +443,8 @@ app.post('/ingest/spo2-samples', async (req, res) => {
   // console.log('POST /ingest/spo2-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)
