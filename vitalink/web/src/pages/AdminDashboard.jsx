@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import { serverUrl } from '@/lib/api'
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [summary, setSummary] = useState([])
   const [error, setError] = useState('')
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+  const API = serverUrl()
   useEffect(() => {
     async function fetchAll() {
       try {
