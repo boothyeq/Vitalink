@@ -12,6 +12,7 @@ import Contact from "./pages/Contact"
 import NotFound from "./pages/NotFound"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
+import RequireAuth from "./components/RequireAuth"
 
 const queryClient = new QueryClient()
 
@@ -24,11 +25,11 @@ const App = () => (
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Navigation />
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/vitals" element={<VitalsTracker />} />
-            <Route path="/education" element={<Education />} />
-            <Route path="/contact" element={<Contact />} />
+            <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="/vitals" element={<RequireAuth><VitalsTracker /></RequireAuth>} />
+            <Route path="/education" element={<RequireAuth><Education /></RequireAuth>} />
+            <Route path="/contact" element={<RequireAuth><Contact /></RequireAuth>} />
             <Route path="/register" element={<Register />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<NotFound />} />

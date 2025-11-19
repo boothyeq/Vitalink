@@ -17,7 +17,7 @@ const VitalsChart = ({ patientId }: Props) => {
   // TODO: Add state for current date/week/month position
   // const [currentPeriod, setCurrentPeriod] = useState(new Date())
   const period = timePeriod === "weekly" ? "weekly" : (timePeriod === "monthly" ? "monthly" : "hourly")
-  const { data, isLoading } = useQuery({ queryKey: ["patient-vitals", patientId, period], queryFn: () => getPatientVitals(patientId, period), refetchOnWindowFocus: false })
+  const { data, isLoading } = useQuery({ queryKey: ["patient-vitals", patientId, period], queryFn: () => getPatientVitals(patientId, period), refetchOnWindowFocus: false, enabled: !!patientId })
   const vitals = data?.vitals || {}
   const toDayKey = (t: string) => {
     const d = new Date(t)

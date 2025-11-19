@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Activity, Heart, TrendingUp, Footprints } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -8,10 +9,24 @@ import RecentReadings from "@/components/dashboard/RecentReadings";
 import QuickActions from "@/components/dashboard/QuickActions";
 import UpcomingReminders from "@/components/dashboard/UpcomingReminders";
 import ThemeToggle from "@/components/ThemeToggle";
+import { supabase } from "@/lib/supabase";
 
 const Dashboard = () => {
-  const patientId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("patientId") || undefined : undefined;
-  const { data, isLoading } = useQuery({ queryKey: ["patient-summary", patientId], queryFn: () => getPatientSummary(patientId), refetchOnWindowFocus: false });
+  const [patientId, setPatientId] = useState<string | undefined>(
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("patientId") || undefined : undefined
+  );
+  useEffect(() => {
+    let mounted = true;
+    async function init() {
+      if (patientId) return;
+      const { data } = await supabase.auth.getSession();
+      const id = data?.session?.user?.id || undefined;
+      if (mounted) setPatientId(id);
+    }
+    init();
+    return () => { mounted = false };
+  }, [patientId]);
+  const { data, isLoading } = useQuery({ queryKey: ["patient-summary", patientId], queryFn: () => getPatientSummary(patientId), refetchOnWindowFocus: false, enabled: !!patientId });
   const summary = data?.summary || {};
   const hr = summary.heartRate ?? "--";
   const bpS = summary.bpSystolic ?? "--";
