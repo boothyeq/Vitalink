@@ -56,7 +56,7 @@ function toDateWithOffset(ts, offsetMin) {
 }
 async function ensurePatient(patientId) {
   if (!patientId) return { ok: false, error: 'missing patientId' }
-  const row = { patient_id: patientId, first_name: 'Dev', last_name: 'Tester', dob: '1970-01-01' }
+  const row = { patient_id: patientId }
   const res = await supabase.from('patients').upsert([row], { onConflict: 'patient_id' })
   if (res.error) {
     console.error('ensurePatient error', res.error)
