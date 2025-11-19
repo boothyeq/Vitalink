@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
@@ -38,23 +39,25 @@ const Register = () => {
     }
     const API = serverUrl()
     const userId = data?.user?.id || null
-    if (userId) {
-      await fetch(`${API}/admin/ensure-patient`, {
+    try {
+      if (userId) {
+        await fetch(`${API}/admin/ensure-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patientId: userId,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            dateOfBirth: formData.dateOfBirth,
+          }),
+        })
+      }
+      await fetch(`${API}/admin/promote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId: userId,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          dateOfBirth: formData.dateOfBirth,
-        }),
+        body: JSON.stringify({ email, role: "patient" }),
       })
-    }
-    await fetch(`${API}/admin/promote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role: "patient" }),
-    })
+    } catch (_) {}
     navigate("/login")
   }
 
@@ -90,7 +93,7 @@ const Register = () => {
 
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required />
+              <PasswordInput id="password" name="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required />
             </div>
 
             <Button type="submit" className="w-full">Register</Button>

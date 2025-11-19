@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
@@ -23,6 +24,13 @@ const Login = () => {
       setError(error.message)
       return
     }
+    const { data } = await supabase.auth.getSession()
+    const role = data?.session?.user?.app_metadata?.role
+    if (role !== "patient") {
+      await supabase.auth.signOut()
+      setError("Only patient accounts can log in")
+      return
+    }
     navigate("/")
   }
 
@@ -41,7 +49,7 @@ const Login = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required />
+              <PasswordInput id="password" name="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required />
             </div>
             <Button type="submit" className="w-full">Login</Button>
             {error ? <div className="text-red-500 text-sm">{error}</div> : null}

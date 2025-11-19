@@ -8,7 +8,7 @@ import { formatTimeHM } from "@/lib/utils"
 type Props = { patientId?: string }
 
 const RecentReadings: React.FC<Props> = ({ patientId }) => {
-  const { data, isLoading } = useQuery({ queryKey: ["patient-vitals", patientId], queryFn: () => getPatientVitals(patientId), refetchOnWindowFocus: false })
+  const { data, isLoading } = useQuery({ queryKey: ["patient-vitals", patientId], queryFn: () => getPatientVitals(patientId), refetchOnWindowFocus: false, enabled: !!patientId })
   const vitals = data?.vitals || {}
 
   const allReadings = [

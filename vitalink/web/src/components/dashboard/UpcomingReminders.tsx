@@ -7,7 +7,7 @@ import { getPatientReminders } from "@/lib/api"
 type Props = { patientId?: string }
 
 const UpcomingReminders: React.FC<Props> = ({ patientId }) => {
-  const { data, isLoading } = useQuery({ queryKey: ["patient-reminders", patientId], queryFn: () => getPatientReminders(patientId), refetchOnWindowFocus: false })
+  const { data, isLoading } = useQuery({ queryKey: ["patient-reminders", patientId], queryFn: () => getPatientReminders(patientId), refetchOnWindowFocus: false, enabled: !!patientId })
   const reminders = data?.reminders || []
   return (
     <Card className="p-6">
