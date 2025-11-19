@@ -2,7 +2,7 @@ const express = require('express')
 const { createClient } = require('@supabase/supabase-js')
 require('dotenv').config()
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
@@ -25,6 +25,22 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     limit() { return this },
   }
   supabase = { from() { return api } }
+}
+
+async function validatePatientId(patientId) {
+  if (!patientId) return { ok: false, error: 'missing patientId' }
+  if (supabaseMock) return { ok: true }
+  try {
+    const r = await supabase.auth.admin.getUserById(patientId)
+    if (r.error) return { ok: false, error: r.error.message }
+    const u = r.data && r.data.user
+    if (!u) return { ok: false, error: 'user not found' }
+    const role = (u.app_metadata && u.app_metadata.role) || null
+    if (role !== 'patient') return { ok: false, error: 'user is not patient' }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) }
+  }
 }
 function toHourWithOffset(ts, offsetMin) {
   const d = new Date(Date.parse(ts) + (offsetMin || 0) * 60000)
@@ -109,6 +125,238 @@ app.get('/admin/summary', async (req, res) => {
     })
   }
   return res.status(200).json({ summary: out })
+})
+
+// Patient endpoints for dashboard
+app.get('/patient/summary', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const hr = await supabase.from('hr_day').select('date,hr_avg').eq('patient_id', pid).order('date', { ascending: false }).limit(1)
+  if (hr.error) return res.status(400).json({ error: hr.error.message })
+  const row = (hr.data && hr.data[0]) || null
+  const st = await supabase.from('steps_day').select('date,steps_total').eq('patient_id', pid).order('date', { ascending: false }).limit(1)
+  if (st.error) return res.status(400).json({ error: st.error.message })
+  const srow = (st.data && st.data[0]) || null
+  const summary = {
+    heartRate: row ? Math.round(row.hr_avg || 0) : null,
+    bpSystolic: null,
+    bpDiastolic: null,
+    weightKg: null,
+    nextAppointmentDate: null,
+    stepsToday: srow ? Math.round(srow.steps_total || 0) : null,
+  }
+  return res.status(200).json({ summary })
+})
+
+app.get('/patient/vitals', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  const period = (req.query && req.query.period) || 'hourly'
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  let out = { hr: [], spo2: [], steps: [], bp: [], weight: [] }
+  if (period === 'weekly') {
+    const hr = await supabase
+      .from('hr_day')
+      .select('date,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_day')
+      .select('date,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_day')
+      .select('date,steps_total')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
+    const hrDays = (hr.data || []).reverse()
+    const dayKeys = hrDays.map((r) => r.date)
+    const startKey = dayKeys[0]
+    const endKey = dayKeys[dayKeys.length - 1]
+    let restingMap = new Map()
+    if (startKey && endKey) {
+      const startTs = `${startKey}T00:00:00.000Z`
+      const endTs = `${endKey}T23:59:59.999Z`
+      const hrs = await supabase
+        .from('hr_hour')
+        .select('hour_ts,hr_avg,hr_count')
+        .eq('patient_id', pid)
+        .gte('hour_ts', startTs)
+        .lte('hour_ts', endTs)
+        .order('hour_ts', { ascending: true })
+      if (!hrs.error) {
+        const byDay = new Map()
+        for (const row of (hrs.data || [])) {
+          const d = new Date(row.hour_ts)
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          const key = `${y}-${m}-${day}`
+          const h = d.getUTCHours()
+          const arr = byDay.get(key) || []
+          arr.push({ h, avg: row.hr_avg, count: row.hr_count })
+          byDay.set(key, arr)
+        }
+        for (const [dk, arr] of byDay) {
+          const night = arr.filter(x => x.h >= 0 && x.h <= 6 && (x.count || 0) >= 10).sort((a,b)=>a.h-b.h)
+          let val
+          if (night.length >= 1) {
+            let best = { score: Infinity, vals: [] }
+            for (let i = 0; i < night.length; i++) {
+              const w = [night[i], night[i+1], night[i+2]].filter(Boolean)
+              if (w.length) {
+                const score = w.reduce((s, x) => s + (x.avg || 0), 0) / w.length
+                const vals = w.map(x => x.avg || 0).sort((a,b)=>a-b)
+                const mid = Math.floor(vals.length/2)
+                const median = vals.length % 2 ? vals[mid] : (vals[mid-1]+vals[mid])/2
+                if (score < best.score) best = { score, vals: [median] }
+              }
+            }
+            val = best.vals[0]
+          } else {
+            const dayAgg = hrDays.find(r => r.date === dk)
+            val = dayAgg ? dayAgg.hr_min || null : null
+          }
+          if (val != null) restingMap.set(dk, Math.round(val))
+        }
+      }
+    }
+    out = {
+      hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
+      spo2: (spo2.data || []).reverse().map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
+      steps: (steps.data || []).reverse().map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
+      bp: [],
+      weight: [],
+    }
+  } else if (period === 'monthly') {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const startStr = start.toISOString().slice(0, 10)
+    const endStr = end.toISOString().slice(0, 10)
+    const hr = await supabase
+      .from('hr_day')
+      .select('date,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_day')
+      .select('date,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_day')
+      .select('date,steps_total')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
+    const hrDays = (hr.data || [])
+    let restingMap = new Map()
+    if (startStr && endStr) {
+      const startTs = `${startStr}T00:00:00.000Z`
+      const endTs = `${endStr}T23:59:59.999Z`
+      const hrs = await supabase
+        .from('hr_hour')
+        .select('hour_ts,hr_avg,hr_count')
+        .eq('patient_id', pid)
+        .gte('hour_ts', startTs)
+        .lte('hour_ts', endTs)
+        .order('hour_ts', { ascending: true })
+      if (!hrs.error) {
+        const byDay = new Map()
+        for (const row of (hrs.data || [])) {
+          const d = new Date(row.hour_ts)
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          const key = `${y}-${m}-${day}`
+          const h = d.getUTCHours()
+          const arr = byDay.get(key) || []
+          arr.push({ h, avg: row.hr_avg, count: row.hr_count })
+          byDay.set(key, arr)
+        }
+        for (const [dk, arr] of byDay) {
+          const night = arr.filter(x => x.h >= 0 && x.h <= 6 && (x.count || 0) >= 10).sort((a,b)=>a.h-b.h)
+          let val
+          if (night.length >= 1) {
+            let best = { score: Infinity, vals: [] }
+            for (let i = 0; i < night.length; i++) {
+              const w = [night[i], night[i+1], night[i+2]].filter(Boolean)
+              if (w.length) {
+                const score = w.reduce((s, x) => s + (x.avg || 0), 0) / w.length
+                const vals = w.map(x => x.avg || 0).sort((a,b)=>a-b)
+                const mid = Math.floor(vals.length/2)
+                const median = vals.length % 2 ? vals[mid] : (vals[mid-1]+vals[mid])/2
+                if (score < best.score) best = { score, vals: [median] }
+              }
+            }
+            val = best.vals[0]
+          } else {
+            const dayAgg = hrDays.find(r => r.date === dk)
+            val = dayAgg ? dayAgg.hr_min || null : null
+          }
+          if (val != null) restingMap.set(dk, Math.round(val))
+        }
+      }
+    }
+    out = {
+      hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
+      spo2: (spo2.data || []).map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
+      steps: (steps.data || []).map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
+      bp: [],
+      weight: [],
+    }
+  } else {
+    const hr = await supabase
+      .from('hr_hour')
+      .select('hour_ts,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_hour')
+      .select('hour_ts,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_hour')
+      .select('hour_ts,steps_total')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
+    out = {
+      hr: (hr.data || []).reverse().map((r) => ({ time: r.hour_ts, min: Math.round((r.hr_min ?? r.hr_avg) || 0), avg: Math.round(r.hr_avg || 0), max: Math.round((r.hr_max ?? r.hr_avg) || 0), count: r.hr_count })),
+      spo2: (spo2.data || []).reverse().map((r) => ({ time: r.hour_ts, min: Math.round((r.spo2_min ?? r.spo2_avg) || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round((r.spo2_max ?? r.spo2_avg) || 0) })),
+      steps: (steps.data || []).reverse().map((r) => ({ time: r.hour_ts, count: Math.round(r.steps_total || 0) })),
+      bp: [],
+      weight: [],
+    }
+  }
+  return res.status(200).json({ vitals: out })
+})
+
+app.get('/patient/reminders', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  return res.status(200).json({ reminders: [] })
 })
 app.get('/admin/auth-users', async (req, res) => {
   const r = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 })
@@ -292,6 +540,8 @@ app.post('/ingest/steps-events', async (req, res) => {
   // console.log('POST /ingest/steps-events', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)
@@ -352,6 +602,8 @@ app.post('/ingest/hr-samples', async (req, res) => {
   // console.log('POST /ingest/hr-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)
@@ -423,6 +675,8 @@ app.post('/ingest/spo2-samples', async (req, res) => {
   // console.log('POST /ingest/spo2-samples', { count: items.length })
   if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
   const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
   const ep = await ensurePatient(patientId)

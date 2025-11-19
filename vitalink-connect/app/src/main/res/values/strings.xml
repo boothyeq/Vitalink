@@ -6,7 +6,7 @@
     <string name="scan_to_capture">Scan to Capture</string>
     <string name="export_data">Export Data</string>
     <string name="availability_missing">Health Connect not available</string>
-    <string name="server_base_url">http://127.0.0.1:3001</string>
+    <string name="server_base_url">http://192.168.0.199:3001</string>
     <string name="subtitle_manage_health">Collect and manage your health data</string>
     <string name="banner_permissions_missing">Grant permissions to collect health data</string>
     <string name="banner_permissions_granted">Permissions Granted — You can now collect health data</string>
@@ -18,4 +18,5 @@
     <string name="hr_last_hour">HR last hour: min %1$d, max %2$d, avg %3$d</string>
     <string name="hr_today_no_samples">HR today: no samples</string>
     <string name="hr_today">HR today: min %1$d, max %2$d, avg %3$d</string>
+    <string name="hr_diag">HR diagnostics: today %1$d, week %2$d, last %3$s</string>
 </resources>
