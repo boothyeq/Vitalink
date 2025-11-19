@@ -12,7 +12,7 @@ export default defineConfig(async () => {
     preview: {
       port: 4173,
     },
-    base: process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : '/',
+    base: process.env.PAGES_BASE || (process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : '/'),
     plugins: [react()],
     resolve: {
       alias: {
