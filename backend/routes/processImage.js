@@ -58,12 +58,23 @@ module.exports = (req, res) => {
 
                 // --- SAVE TO NEW TABLE STRUCTURE ---
                 if (jsonResult.sys && jsonResult.dia && jsonResult.pulse) {
-                    const { error: supabaseError } = await supabase.from('health_events').insert([{ 
+                    const MOCK_USER_ID = process.env.MOCK_USER_ID || '00000000-0000-0000-0000-000000000001';
+                    let { error: supabaseError } = await supabase.from('health_events').insert([{ 
                         type: 'blood_pressure',
                         value_1: parseInt(jsonResult.sys), 
                         value_2: parseInt(jsonResult.dia), 
-                        value_3: parseInt(jsonResult.pulse) 
+                        value_3: parseInt(jsonResult.pulse),
+                        user_id: MOCK_USER_ID
                     }]);
+                    if (supabaseError && supabaseError.code === '23503') {
+                        const retry = await supabase.from('health_events').insert([{ 
+                            type: 'blood_pressure',
+                            value_1: parseInt(jsonResult.sys), 
+                            value_2: parseInt(jsonResult.dia), 
+                            value_3: parseInt(jsonResult.pulse)
+                        }]);
+                        supabaseError = retry.error;
+                    }
                     if (supabaseError) console.error('Supabase insert error:', supabaseError);
                 }
 

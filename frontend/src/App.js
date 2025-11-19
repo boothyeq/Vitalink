@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react'; 
 import './App.css';
-
-// Import the new screen components
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import CaptureScreen from './components/CaptureScreens';
 import ManualEntryForm from './components/ManualEntryForm';
 import ResultsScreen from './components/ResultsScreen';
+import HealthLog from './components/HealthLog';
 
 const App = () => {
   // appState determines which component to show the user
@@ -68,14 +68,23 @@ const App = () => {
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Digital Health Tracker</h1>
-      </header>
-      <main>
-        {renderContent()}
-      </main>
-    </div>
+    <Router>
+      <div className="App">
+        <header className="App-header">
+          <h1>Digital Health Tracker</h1>
+          <nav className="nav">
+            <Link to="/">Scanner</Link>
+            <Link to="/log">Health Log</Link>
+          </nav>
+        </header>
+        <main>
+          <Routes>
+            <Route path="/" element={renderContent()} />
+            <Route path="/log" element={<HealthLog />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 };
 

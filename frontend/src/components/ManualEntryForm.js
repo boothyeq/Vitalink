@@ -53,7 +53,7 @@ const ManualEntryForm = ({ onSuccess, onCancel }) => {
     }
 
     try {
-        await axios.post('http://192.168.1.15:5000/api/add-manual-event', payload);
+        await axios.post('http://192.168.100.56:5000/api/add-manual-event', payload);
         // For manual entry, we construct a simple result object for the results screen
         const manualResult = {
             sys: sys || null,
