@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { serverUrl } from '@/lib/api'
 import { useNavigate } from 'react-router-dom'
 
 export default function Register() {
@@ -18,7 +19,7 @@ export default function Register() {
     const { error, data } = await supabase.auth.signUp({ email: emailClean, password: passwordClean })
     if (error) setError(error.message)
     else {
-      const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+      const API = serverUrl()
       if (role === 'admin') {
         try {
           await fetch(`${API}/admin/promote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: emailClean, role: 'admin' }) })
