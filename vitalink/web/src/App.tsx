@@ -10,6 +10,8 @@ import VitalsTracker from "./pages/VitalsTracker"
 import Education from "./pages/Education"
 import Contact from "./pages/Contact"
 import NotFound from "./pages/NotFound"
+import Register from "./pages/Register"
+import Login from "./pages/Login"
 
 const queryClient = new QueryClient()
 
@@ -27,6 +29,8 @@ const App = () => (
             <Route path="/vitals" element={<VitalsTracker />} />
             <Route path="/education" element={<Education />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<Login />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

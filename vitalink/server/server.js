@@ -54,10 +54,16 @@ function toDateWithOffset(ts, offsetMin) {
   const day = String(d.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-async function ensurePatient(patientId) {
+async function ensurePatient(patientId, info) {
   if (!patientId) return { ok: false, error: 'missing patientId' }
-  const row = { patient_id: patientId }
-  const res = await supabase.from('patients').upsert([row], { onConflict: 'patient_id' })
+  const row = {
+    patient_id: patientId,
+    first_name: info && info.firstName ? info.firstName : undefined,
+    last_name: info && info.lastName ? info.lastName : undefined,
+    date_of_birth: info && info.dateOfBirth ? info.dateOfBirth : undefined,
+  }
+  const clean = Object.fromEntries(Object.entries(row).filter(([_, v]) => v !== undefined))
+  const res = await supabase.from('patients').upsert([clean], { onConflict: 'patient_id' })
   if (res.error) {
     console.error('ensurePatient error', res.error)
     return { ok: false, error: res.error.message }
@@ -88,7 +94,12 @@ app.get('/health', (req, res) => res.status(200).send('ok'))
 app.post('/admin/ensure-patient', async (req, res) => {
   const pid = req.body && req.body.patientId
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
-  const r = await ensurePatient(pid)
+  const info = {
+    firstName: req.body && req.body.firstName,
+    lastName: req.body && req.body.lastName,
+    dateOfBirth: req.body && req.body.dateOfBirth,
+  }
+  const r = await ensurePatient(pid, info)
   if (!r.ok) return res.status(400).json({ ok: false, error: r.error })
   return res.status(200).json({ ok: true })
 })
