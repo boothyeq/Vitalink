@@ -117,17 +117,28 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch { ensurePatientExists(); readMetricsAndShow(txt); updateLastHourHrLabel(); updateTodayHrLabel(); updateHrDiagnostics(); syncTodayToServer() }
         }
 
-        val scanPreview = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
-            val msg = if (bmp != null) "Image captured" else "Capture cancelled"
-            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+        val scanPreview = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { _ -> }
+        btnScan.setOnClickListener {
+            val url = getString(R.string.scan_capture_url)
+            try {
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                startActivity(intent)
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(this, "Scan link not available", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
-        btnScan.setOnClickListener { scanPreview.launch(null) }
         btnExport.setOnClickListener {
             android.widget.Toast.makeText(this, "Export coming soon", android.widget.Toast.LENGTH_SHORT).show()
         }
 
-        findViewById<Button>(R.id.btnSwitchUser).setOnClickListener {
-            startActivity(android.content.Intent(this, LoginActivity::class.java))
+        findViewById<Button>(R.id.btnSwitchUser).apply {
+            text = getString(R.string.logout)
+            setOnClickListener {
+                val sp = getSharedPreferences("vitalink", android.content.Context.MODE_PRIVATE)
+                sp.edit().remove("patientId").remove("supabaseAccessToken").remove("userEmail").apply()
+                startActivity(android.content.Intent(this@MainActivity, LoginActivity::class.java))
+                finish()
+            }
         }
     }
 
@@ -161,7 +172,12 @@ class MainActivity : AppCompatActivity() {
     private suspend fun ensurePatientExists() {
         val pid = currentPatientId()
         if (pid.isEmpty()) return
-        val json = "{\"patientId\":\"" + pid + "\"}"
+        val sp = getSharedPreferences("vitalink", android.content.Context.MODE_PRIVATE)
+        val email = sp.getString("userEmail", null)
+        val namePart = (email ?: "").substringBefore("@")
+        val firstName = namePart.replace(Regex("[^A-Za-z]"), "").ifEmpty { "User" }
+        val lastName = "Patient"
+        val json = "{\"patientId\":\"" + pid + "\",\"firstName\":\"" + firstName + "\",\"lastName\":\"" + lastName + "\"}"
         val body = json.toRequestBody("application/json".toMediaType())
         val req = Request.Builder().url(baseUrl + "/admin/ensure-patient").post(body).build()
         withContext(Dispatchers.IO) { try { http.newCall(req).execute().close() } catch (_: Exception) {} }
@@ -634,6 +650,11 @@ class MainActivity : AppCompatActivity() {
             txt.text = "login required"
             return
         }
+        val sp = getSharedPreferences("vitalink", android.content.Context.MODE_PRIVATE)
+        val email = sp.getString("userEmail", null)
+        val namePart = (email ?: "").substringBefore("@")
+        val firstName = namePart.replace(Regex("[^A-Za-z]"), "").ifEmpty { "User" }
+        val lastName = "Patient"
         val stepsItems = stepsToday.map { r ->
             val start = r.startTime
             val end = r.endTime
@@ -646,6 +667,8 @@ class MainActivity : AppCompatActivity() {
                 "\"endTs\":\"" + end.toString() + "\"," +
                 "\"count\":" + r.count + "," +
                 "\"recordUid\":\"" + uid + "\"," +
+                "\"firstName\":\"" + firstName + "\"," +
+                "\"lastName\":\"" + lastName + "\"," +
                 "\"tzOffsetMin\":" + offsetMin +
             "}"
         }
@@ -662,6 +685,8 @@ class MainActivity : AppCompatActivity() {
                         "\"timeTs\":\"" + t.toString() + "\"," +
                         "\"bpm\":" + s.beatsPerMinute + "," +
                         "\"recordUid\":\"" + uid + "\"," +
+                        "\"firstName\":\"" + firstName + "\"," +
+                        "\"lastName\":\"" + lastName + "\"," +
                         "\"tzOffsetMin\":" + offsetMin +
                     "}"
                 )
@@ -705,6 +730,8 @@ class MainActivity : AppCompatActivity() {
                 "\"timeTs\":\"" + t.toString() + "\"," +
                 "\"spo2Pct\":" + pct + "," +
                 "\"recordUid\":\"" + uid + "\"," +
+                "\"firstName\":\"" + firstName + "\"," +
+                "\"lastName\":\"" + lastName + "\"," +
                 "\"tzOffsetMin\":" + offsetMin +
             "}"
         }
@@ -767,6 +794,8 @@ class MainActivity : AppCompatActivity() {
                             "\"endTs\":\"" + i.endTs + "\"," +
                             "\"count\":" + i.count + "," +
                             "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"firstName\":\"" + firstName + "\"," +
+                            "\"lastName\":\"" + lastName + "\"," +
                             "\"tzOffsetMin\":" + i.tzOffsetMin +
                         "}"
                     }
@@ -785,6 +814,8 @@ class MainActivity : AppCompatActivity() {
                             "\"timeTs\":\"" + i.timeTs + "\"," +
                             "\"bpm\":" + i.bpm + "," +
                             "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"firstName\":\"" + firstName + "\"," +
+                            "\"lastName\":\"" + lastName + "\"," +
                             "\"tzOffsetMin\":" + i.tzOffsetMin +
                         "}"
                     }
@@ -803,6 +834,8 @@ class MainActivity : AppCompatActivity() {
                             "\"timeTs\":\"" + i.timeTs + "\"," +
                             "\"spo2Pct\":" + i.spo2Pct + "," +
                             "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"firstName\":\"" + firstName + "\"," +
+                            "\"lastName\":\"" + lastName + "\"," +
                             "\"tzOffsetMin\":" + i.tzOffsetMin +
                         "}"
                     }
