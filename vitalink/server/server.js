@@ -56,10 +56,12 @@ function toDateWithOffset(ts, offsetMin) {
 }
 async function ensurePatient(patientId, info) {
   if (!patientId) return { ok: false, error: 'missing patientId' }
+  const first = (info && info.firstName) ? info.firstName : 'User'
+  const last = (info && info.lastName) ? info.lastName : 'Patient'
   const row = {
     patient_id: patientId,
-    first_name: info && info.firstName ? info.firstName : undefined,
-    last_name: info && info.lastName ? info.lastName : undefined,
+    first_name: first,
+    last_name: last,
     date_of_birth: info && info.dateOfBirth ? info.dateOfBirth : undefined,
   }
   const clean = Object.fromEntries(Object.entries(row).filter(([_, v]) => v !== undefined))
@@ -555,7 +557,8 @@ app.post('/ingest/steps-events', async (req, res) => {
   if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
-  const ep = await ensurePatient(patientId)
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
   if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
   const eo = await ensureOrigins(origins)
   if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
@@ -617,7 +620,8 @@ app.post('/ingest/hr-samples', async (req, res) => {
   if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
-  const ep = await ensurePatient(patientId)
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
   if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
   const eo = await ensureOrigins(origins)
   if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
@@ -690,7 +694,8 @@ app.post('/ingest/spo2-samples', async (req, res) => {
   if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
   const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
   const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
-  const ep = await ensurePatient(patientId)
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
   if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
   const eo = await ensureOrigins(origins)
   if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })

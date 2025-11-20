@@ -72,7 +72,11 @@ class LoginActivity : AppCompatActivity() {
                     if (uid.isNotEmpty()) {
                         val sp = getSharedPreferences("vitalink", Context.MODE_PRIVATE)
                         val token = session?.accessToken ?: ""
-                        sp.edit().putString("patientId", uid).putString("supabaseAccessToken", token).apply()
+                        sp.edit()
+                            .putString("patientId", uid)
+                            .putString("supabaseAccessToken", token)
+                            .putString("userEmail", inputEmail)
+                            .apply()
                         finish()
                     } else {
                         Toast.makeText(this@LoginActivity, "Registration failed", Toast.LENGTH_SHORT).show()
@@ -110,7 +114,12 @@ class LoginActivity : AppCompatActivity() {
                     if (uid.isNotEmpty()) {
                         val sp = getSharedPreferences("vitalink", Context.MODE_PRIVATE)
                         val token = session?.accessToken ?: ""
-                        sp.edit().putString("patientId", uid).putString("supabaseAccessToken", token).apply()
+                        val emailStored = session?.user?.email ?: inputEmail
+                        sp.edit()
+                            .putString("patientId", uid)
+                            .putString("supabaseAccessToken", token)
+                            .putString("userEmail", emailStored)
+                            .apply()
                         finish()
                     } else {
                         Toast.makeText(this@LoginActivity, "Login failed", Toast.LENGTH_SHORT).show()
