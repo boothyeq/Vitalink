@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center_horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:id="@+id/txtTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textStyle="bold"
+        android:textSize="24sp"
+        android:gravity="start"/>
+
+    <TextView
+        android:id="@+id/txtSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/subtitle_manage_health"
+        android:textSize="14sp"
+        android:gravity="start"
+        android:layout_marginTop="4dp"/>
+
+    <LinearLayout
+        android:id="@+id/bannerBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/banner_required">
+        <View
+            android:id="@+id/bannerAccent"
+            android:layout_width="6dp"
+            android:layout_height="match_parent"
+            android:layout_marginRight="12dp"
+            android:background="@color/bannerRequiredAccent"/>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/txtBannerTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/banner_title_required"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+            <TextView
+                android:id="@+id/txtBannerDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/banner_desc_required"
+                android:textSize="14sp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnGrant"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/grant_permissions"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRead"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/collect_health_data"
+        android:backgroundTint="@color/btnPrimary"
+        android:textColor="@color/btnOnPrimary"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnScan"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/scan_to_capture"
+        android:backgroundTint="@color/btnDanger"
+        android:textColor="@color/btnOnDanger"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnExport"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/export_data"
+        style="?attr/materialButtonOutlinedStyle"
+        android:textColor="@color/btnOutlineText"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSwitchUser"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Switch User"
+        style="?attr/materialButtonOutlinedStyle"
+        android:textColor="@color/btnOutlineText"/>
+
+    <TextView
+        android:id="@+id/txtOutput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/txtHrLastHour"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/txtHrToday"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/txtHrDiag"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="14sp"/>
+
+    <ScrollView
+        android:id="@+id/scrollVertical"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1">
+        <HorizontalScrollView
+            android:id="@+id/scrollHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <TableLayout
+                android:id="@+id/tblData"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:stretchColumns="0,1,2,3,4"/>
+        </HorizontalScrollView>
+    </ScrollView>
+</LinearLayout>
