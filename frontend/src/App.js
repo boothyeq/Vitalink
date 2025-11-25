@@ -33,7 +33,7 @@ const App = () => {
     if (dbgImg) {
       setDebugImage(`data:image/png;base64,${dbgImg}`);
     }
-    setAppState('capture');
+    setAppState('capture'); // Set appState back to capture on error
   };
 
   // Resets the entire application to the beginning
@@ -57,12 +57,13 @@ const App = () => {
       default:
         return (
           <CaptureScreen
-            setAppState={setAppState}
-            onSuccess={handleSuccess}
-            onError={handleError}
-            error={error}
-            debugImage={debugImage}
-          />
+              setAppState={setAppState}
+              onSuccess={handleSuccess}
+              onError={handleError}
+              error={error}
+              debugImage={debugImage}
+              onReset={resetApp}
+            />
         );
     }
   };

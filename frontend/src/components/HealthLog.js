@@ -53,7 +53,7 @@ const HealthLog = () => {
   useEffect(() => {
     const run = async () => {
       try {
-        const API_BASE = `http://192.168.100.56:5000`;
+        const API_BASE = process.env.REACT_APP_BACKEND_URL;
         const res = await axios.get(`${API_BASE}/api/health-events`);
         setItems(Array.isArray(res.data) ? res.data : []);
       } catch (e) {

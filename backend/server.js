@@ -22,6 +22,6 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '192.168.100.56', () => {
-  console.log(`Server running on port ${PORT} and listening on all network interfaces`);
+app.listen(PORT, process.env.BACKEND_IP, () => {
+  console.log(`Server running on ${process.env.BACKEND_IP}:${PORT}`);
 });

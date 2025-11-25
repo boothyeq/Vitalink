@@ -58,12 +58,29 @@ module.exports = (req, res) => {
 
                 // --- SAVE TO NEW TABLE STRUCTURE ---
                 if (jsonResult.sys && jsonResult.dia && jsonResult.pulse) {
+                    const sys = parseInt(jsonResult.sys);
+                    const dia = parseInt(jsonResult.dia);
+                    const pulse = parseInt(jsonResult.pulse);
+
+                    if (isNaN(sys) || isNaN(dia) || isNaN(pulse)) {
+                        return res.status(400).json({ error: 'Invalid numeric values received from OCR.' });
+                    }
+
+                    if (sys < 70 || sys > 260) {
+                        return res.status(400).json({ error: 'SYS value is out of range (70-260).' });
+                    }
+                    if (dia < 40 || dia > 160) {
+                        return res.status(400).json({ error: 'DIA value is out of range (40-160).' });
+                    }
+                    if (pulse < 30 || pulse > 240) {
+                        return res.status(400).json({ error: 'PULSE value is out of range (30-240).' });
+                    }
                     const MOCK_USER_ID = process.env.MOCK_USER_ID || '00000000-0000-0000-0000-000000000001';
                     let { error: supabaseError } = await supabase.from('health_events').insert([{ 
                         type: 'blood_pressure',
-                        value_1: parseInt(jsonResult.sys), 
-                        value_2: parseInt(jsonResult.dia), 
-                        value_3: parseInt(jsonResult.pulse),
+                        value_1: sys, 
+                        value_2: dia, 
+                        value_3: pulse,
                         user_id: MOCK_USER_ID
                     }]);
                     if (supabaseError && supabaseError.code === '23503') {
