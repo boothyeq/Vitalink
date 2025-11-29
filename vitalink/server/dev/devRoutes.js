@@ -12,11 +12,11 @@ module.exports = function (app, supabase, ensurePatient, supabaseMock) {
     const out = { patientId: pid }
     const en = await ensurePatient(pid)
     out.ensurePatient = en
-    const p1 = await supabase.from('patients').select('id').eq('id', pid).limit(1)
+    const p1 = await supabase.from('patients').select('id').eq('id', pid).range(0, 0)
     out.patients_select = { count: (p1.data || []).length, error: p1.error ? p1.error.message : null }
-    const p2 = await supabase.from('patient').select('id').eq('id', pid).limit(1)
+    const p2 = await supabase.from('patient').select('id').eq('id', pid).range(0, 0)
     out.patient_select = { count: (p2.data || []).length, error: p2.error ? p2.error.message : null }
-    const d1 = await supabase.from('devices').select('device_id,patient_id').eq('patient_id', pid).limit(1)
+    const d1 = await supabase.from('devices').select('device_id,patient_id').eq('patient_id', pid).range(0, 0)
     out.devices_select = { count: (d1.data || []).length, error: d1.error ? d1.error.message : null }
     return res.status(200).json(out)
   })

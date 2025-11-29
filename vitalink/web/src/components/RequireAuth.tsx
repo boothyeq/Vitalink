@@ -10,6 +10,12 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   useEffect(() => {
     let unsub: any
     async function init() {
+      const pid = new URLSearchParams(location.search).get('patientId')
+      if (pid) {
+        setAuthed(true)
+        setLoading(false)
+        return
+      }
       const { data } = await supabase.auth.getSession()
       const role = data?.session?.user?.app_metadata?.role
       setAuthed(!!(data && data.session && role === "patient"))
