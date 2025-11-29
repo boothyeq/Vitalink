@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card"
 import { Heart, AlertCircle, Activity, Users, BookOpen } from "lucide-react"
+import * as React from "react"
 
 const modules = [
   {
@@ -53,6 +54,16 @@ const modules = [
 ]
 
 export default function Education() {
+  const [query, setQuery] = React.useState("")
+  const filtered = modules.filter((m) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return (
+      m.id.toLowerCase().includes(q) ||
+      m.title.toLowerCase().includes(q) ||
+      m.description.toLowerCase().includes(q)
+    )
+  })
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -60,9 +71,18 @@ export default function Education() {
           <h1 className="text-3xl font-bold text-foreground mb-2">Educational Resources</h1>
           <p className="text-muted-foreground">Learn about heart failure management through our comprehensive modules</p>
         </div>
+        <div className="mb-6">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search modules"
+            aria-label="Search educational modules"
+            className="w-full md:w-96 px-4 py-2 rounded-md border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {modules.map((module) => {
+          {filtered.map((module) => {
             const Icon = module.icon
             return (
               <a
@@ -71,6 +91,7 @@ export default function Education() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block"
+                aria-label={`Open ${module.title} (Module ${module.id}) in new tab`}
               >
                 <Card className="p-6 hover:shadow-lg transition-all cursor-pointer h-full">
                   <div className="flex items-start gap-4 mb-4">

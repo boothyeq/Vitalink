@@ -52,10 +52,11 @@ const Register = () => {
           }),
         })
       }
+      const payload = userId ? { id: userId, role: "patient" } : { email, role: "patient" }
       await fetch(`${API}/admin/promote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role: "patient" }),
+        body: JSON.stringify(payload),
       })
     } catch (_) {}
     navigate("/login")

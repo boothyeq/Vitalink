@@ -7,17 +7,26 @@ import { Activity, Droplet, Weight, TrendingUp, Heart, ChevronLeft, ChevronRight
 import { useQuery } from "@tanstack/react-query"
 import { getPatientVitals } from "@/lib/api"
 import { formatTimeHM } from "@/lib/utils"
-import { format as formatDate, differenceInCalendarWeeks, differenceInCalendarMonths, isYesterday, startOfWeek } from "date-fns"
+import { format as formatDate, differenceInCalendarWeeks, differenceInCalendarMonths, isYesterday, startOfWeek, startOfDay, endOfDay, addDays, addWeeks, addMonths } from "date-fns"
 
 type Props = { patientId?: string }
 
 const VitalsChart = ({ patientId }: Props) => {
   const [activeTab, setActiveTab] = useState("heartRate")
   const [timePeriod, setTimePeriod] = useState<"daily" | "weekly" | "monthly">("daily")
-  // TODO: Add state for current date/week/month position
-  // const [currentPeriod, setCurrentPeriod] = useState(new Date())
+  const [currentPeriod, setCurrentPeriod] = useState(new Date())
   const period = timePeriod === "weekly" ? "weekly" : (timePeriod === "monthly" ? "monthly" : "hourly")
-  const { data, isLoading } = useQuery({ queryKey: ["patient-vitals", patientId, period], queryFn: () => getPatientVitals(patientId, period), refetchOnWindowFocus: false, enabled: !!patientId })
+  const { data, isLoading } = useQuery({
+    queryKey: ["patient-vitals", patientId, period, formatDate(currentPeriod, "yyyy-MM-dd"), (0 - new Date().getTimezoneOffset())],
+    queryFn: () => getPatientVitals(
+      patientId,
+      period,
+      timePeriod === "daily" ? formatDate(currentPeriod, "yyyy-MM-dd") : undefined,
+      timePeriod === "daily" ? (0 - new Date().getTimezoneOffset()) : undefined,
+    ),
+    refetchOnWindowFocus: false,
+    enabled: !!patientId,
+  })
   const vitals = data?.vitals || {}
   const toDayKey = (t: string) => {
     const d = new Date(t)
@@ -53,7 +62,7 @@ const VitalsChart = ({ patientId }: Props) => {
   const hrWeeklyPadded = timePeriod === "weekly"
     ? (() => {
         const baseArr = hr.length ? hr : hrSrc
-        const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
+        const monday = startOfWeek(currentPeriod, { weekStartsOn: 1 })
         const byKey = new Map<string, { min?: number; avg?: number; max?: number }>(baseArr.map((d: any) => [String(d.time), { min: d.min, avg: d.avg, max: d.max }]))
         const out: Array<{ time: string; min?: number; avg?: number; max?: number }> = []
         for (let i = 0; i < 7; i++) {
@@ -69,7 +78,7 @@ const VitalsChart = ({ patientId }: Props) => {
   const spo2WeeklyPadded = timePeriod === "weekly"
     ? (() => {
         const baseArr = spo2.length ? spo2 : spo2Src
-        const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
+        const monday = startOfWeek(currentPeriod, { weekStartsOn: 1 })
         const byKey = new Map<string, { min?: number; avg?: number; max?: number }>(baseArr.map((d: any) => [String(d.time), { min: d.min, avg: d.avg, max: d.max }]))
         const out: Array<{ time: string; min?: number; avg?: number; max?: number }> = []
         for (let i = 0; i < 7; i++) {
@@ -85,8 +94,7 @@ const VitalsChart = ({ patientId }: Props) => {
   const hrMonthlyPadded = timePeriod === "monthly"
     ? (() => {
         const baseArr = hr.length ? hr : hrSrc
-        const last = baseArr.length ? new Date(baseArr[baseArr.length - 1].time as any) : new Date()
-        const y = last.getFullYear(); const m = last.getMonth()
+        const y = currentPeriod.getFullYear(); const m = currentPeriod.getMonth()
         const lastDay = new Date(y, m + 1, 0).getDate()
         const byKey = new Map<string, { min?: number; avg?: number; max?: number }>(baseArr.map((d: any) => [String(d.time), { min: d.min, avg: d.avg, max: d.max }]))
         const out: Array<{ time: string; min?: number; avg?: number; max?: number }> = []
@@ -102,8 +110,7 @@ const VitalsChart = ({ patientId }: Props) => {
   const spo2MonthlyPadded = timePeriod === "monthly"
     ? (() => {
         const baseArr = spo2.length ? spo2 : spo2Src
-        const last = baseArr.length ? new Date(baseArr[baseArr.length - 1].time as any) : new Date()
-        const y = last.getFullYear(); const m = last.getMonth()
+        const y = currentPeriod.getFullYear(); const m = currentPeriod.getMonth()
         const lastDay = new Date(y, m + 1, 0).getDate()
         const byKey = new Map<string, { min?: number; avg?: number; max?: number }>(baseArr.map((d: any) => [String(d.time), { min: d.min, avg: d.avg, max: d.max }]))
         const out: Array<{ time: string; min?: number; avg?: number; max?: number }> = []
@@ -125,7 +132,7 @@ const VitalsChart = ({ patientId }: Props) => {
       : stepsSrc
   const stepsWeeklyPadded = timePeriod === "weekly"
     ? (() => {
-        const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
+        const monday = startOfWeek(currentPeriod, { weekStartsOn: 1 })
         const byKey = new Map<string, number>(stepsDayAgg.map((d: any) => [String(d.time), d.count]))
         const out: Array<{ time: string; count?: number }> = []
         for (let i = 0; i < 7; i++) {
@@ -139,8 +146,7 @@ const VitalsChart = ({ patientId }: Props) => {
     : stepsSrc
   const stepsMonthlyPadded = timePeriod === "monthly"
     ? (() => {
-        const base = stepsDayAgg.length ? new Date(stepsDayAgg[stepsDayAgg.length - 1].time as any) : new Date()
-        const y = base.getFullYear(); const m = base.getMonth()
+        const y = currentPeriod.getFullYear(); const m = currentPeriod.getMonth()
         const first = new Date(y, m, 1)
         const last = new Date(y, m + 1, 0)
         const byKey = new Map<string, number>(stepsDayAgg.map((d: any) => [String(d.time), d.count]))
@@ -180,33 +186,34 @@ const VitalsChart = ({ patientId }: Props) => {
     : []
 
   const getDateRangeLabel = () => {
-    const dates = merged
-      .map((d) => new Date(d.date as any))
-      .filter((dt) => !Number.isNaN(dt.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime())
-    if (!dates.length) return "No data"
-    const start = dates[0]
-    const end = dates[dates.length - 1]
     const now = new Date()
     if (timePeriod === "daily") {
-      if (isYesterday(end)) return "Yesterday"
-      return formatDate(end, "PPPP")
+      if (isYesterday(currentPeriod)) return "Yesterday"
+      return formatDate(currentPeriod, "PPPP")
     }
     if (timePeriod === "weekly") {
+      const start = startOfWeek(currentPeriod, { weekStartsOn: 1 })
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
       if (differenceInCalendarWeeks(now, end) === 1) return "Last week"
       return `${formatDate(start, "PP")} - ${formatDate(end, "PP")}`
     }
+    const y = currentPeriod.getFullYear(); const m = currentPeriod.getMonth()
+    const end = new Date(y, m + 1, 0)
     if (differenceInCalendarMonths(now, end) === 1) return "Last month"
     return formatDate(end, "LLLL yyyy")
   }
 
-  // TODO: Implement navigation logic
   const handlePrevious = () => {
-    console.log("Navigate to previous period")
+    if (timePeriod === "daily") setCurrentPeriod(addDays(currentPeriod, -1))
+    else if (timePeriod === "weekly") setCurrentPeriod(addWeeks(currentPeriod, -1))
+    else setCurrentPeriod(addMonths(currentPeriod, -1))
   }
 
   const handleNext = () => {
-    console.log("Navigate to next period")
+    if (timePeriod === "daily") setCurrentPeriod(addDays(currentPeriod, 1))
+    else if (timePeriod === "weekly") setCurrentPeriod(addWeeks(currentPeriod, 1))
+    else setCurrentPeriod(addMonths(currentPeriod, 1))
   }
 
   function calculateStats(key: keyof typeof merged[number]) {
@@ -215,23 +222,16 @@ const VitalsChart = ({ patientId }: Props) => {
       .filter((dt) => !Number.isNaN(dt.getTime()))
       .sort((a, b) => a.getTime() - b.getTime())
     if (!dates.length) return { min: undefined, max: undefined, avg: undefined }
-    let start = dates[0]
-    let end = dates[dates.length - 1]
+    let start = startOfDay(currentPeriod)
+    let end = endOfDay(start)
     if (timePeriod === "weekly") {
-      start = startOfWeek(new Date(), { weekStartsOn: 1 })
+      start = startOfWeek(currentPeriod, { weekStartsOn: 1 })
       end = new Date(start)
       end.setDate(start.getDate() + 6)
     } else if (timePeriod === "monthly") {
-      const last = dates[dates.length - 1]
-      const y = last.getFullYear(); const m = last.getMonth()
+      const y = currentPeriod.getFullYear(); const m = currentPeriod.getMonth()
       start = new Date(y, m, 1)
       end = new Date(y, m + 1, 0)
-    } else {
-      const last = dates[dates.length - 1]
-      start = new Date(last)
-      start.setHours(0, 0, 0, 0)
-      end = new Date(start)
-      end.setHours(23, 59, 59, 999)
     }
     const nums = merged
       .filter((d) => {
@@ -420,7 +420,7 @@ const VitalsChart = ({ patientId }: Props) => {
             </TabsContent>
           </Tabs>
         ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">No data available</div>
+          <div className="flex h-full items-center justify-center text-muted-foreground">No record</div>
         )}
       </div>
     </Card>

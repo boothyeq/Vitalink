@@ -21,6 +21,7 @@ vitalink/server/.npmrc
 vitalink/web/node_modules/
 vitalink/web/.env
 vitalink/web/.vite/
+vitalink/web/dist/
 *.tmp
 *.bak
 ~*

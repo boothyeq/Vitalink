@@ -1,11 +1,12 @@
 import { NavLink } from "@/components/NavLink"
-import { Heart, LayoutDashboard, Activity, BookOpen, MessageCircle, Menu } from "lucide-react"
+import { Heart, LayoutDashboard, Activity, BookOpen, MessageCircle, Menu, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/vitals", label: "Vitals Tracker", icon: Activity },
+  { to: "/self-check", label: "Self Check", icon: ClipboardList },
   { to: "/education", label: "Education", icon: BookOpen },
   { to: "/contact", label: "Get in Touch", icon: MessageCircle },
 ]
@@ -19,7 +20,7 @@ export default function Navigation() {
             <div className="p-2 bg-primary/10 rounded-lg">
               <Heart className="w-6 h-6 text-primary" />
             </div>
-            <span className="text-xl font-bold text-foreground">VitaLink</span>
+            <span className="text-xl font-bold text-foreground">MyHFGuard</span>
           </div>
           <div className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
