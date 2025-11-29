@@ -61,9 +61,10 @@ export async function getPatientReminders(patientId?: string) {
 
 // --- New Integration Functions ---
 
-export async function processImage(file: File) {
+export async function processImage(file: File, patientId: string) {
   const formData = new FormData();
   formData.append('image', file);
+  formData.append('patientId', patientId);
 
   const res = await fetch(`${serverUrl()}/api/process-image`, {
     method: 'POST',
@@ -78,13 +79,13 @@ export async function processImage(file: File) {
   return res.json();
 }
 
-export async function addManualEvent(data: any) {
+export async function addManualEvent(data: any, patientId: string) {
   const res = await fetch(`${serverUrl()}/api/add-manual-event`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, patientId }),
   });
 
   if (!res.ok) {
@@ -108,4 +109,27 @@ export async function getHealthEvents(userId?: string) {
   }
 
   return res.json();
+}
+
+export type PatientProfile = {
+  patient_id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  created_at: string | null;
+  last_sign_in_at: string | null;
+  date_of_birth?: string;
+}
+
+export async function getPatients() {
+  const res = await fetch(`${serverUrl()}/api/admin/patients`);
+  if (!res.ok) throw new Error('Failed to fetch patients');
+  return res.json() as Promise<{ patients: PatientProfile[] }>;
+}
+
+export async function getPatientProfile(patientId: string) {
+  const res = await fetch(`${serverUrl()}/api/admin/patients?patientId=${encodeURIComponent(patientId)}`);
+  if (!res.ok) throw new Error('Failed to fetch patient profile');
+  const data = await res.json();
+  return data.patients[0] as PatientProfile | undefined;
 }

@@ -12,11 +12,11 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     async function init() {
       const { data } = await supabase.auth.getSession()
       const role = data?.session?.user?.app_metadata?.role
-      setAuthed(!!(data && data.session && role === "patient"))
+      setAuthed(!!(data && data.session && (role === "patient" || role === "admin")))
       setLoading(false)
       const s = supabase.auth.onAuthStateChange((_event, session) => {
         const r = (session as any)?.user?.app_metadata?.role
-        setAuthed(!!session && r === "patient")
+        setAuthed(!!session && (r === "patient" || r === "admin"))
       })
       unsub = s && s.data && s.data.subscription && s.data.subscription.unsubscribe
     }

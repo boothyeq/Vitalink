@@ -25,12 +25,21 @@ export default function VitalsTracker() {
   const [cameraMode, setCameraMode] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [pendingAction, setPendingAction] = useState<'camera' | 'upload' | null>(null);
+  const [patientId, setPatientId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    async function init() {
+      const { data } = await supabase.auth.getSession();
+      const userId = data?.session?.user?.id;
+      if (userId) {
+        setPatientId(userId);
+      }
+    }
+    init();
     fetchEvents();
   }, []);
 
@@ -57,12 +66,15 @@ export default function VitalsTracker() {
   };
 
   const handleScan = async () => {
-    if (!selectedImage) return;
+    if (!selectedImage || !patientId) {
+      toast.error("Unable to identify user. Please log in again.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await processImage(selectedImage);
+      const result = await processImage(selectedImage, patientId);
       setOcrResult(result);
       toast.success("Scan complete! Please verify and save the readings.");
       // Pre-fill manual form with results for verification
@@ -88,6 +100,10 @@ export default function VitalsTracker() {
 
   const handleManualSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) e.preventDefault();
+    if (!patientId) {
+      toast.error("Unable to identify user. Please log in again.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -98,7 +114,7 @@ export default function VitalsTracker() {
         value1: manualForm.sys,
         value2: manualForm.dia,
         value3: manualForm.pulse
-      });
+      }, patientId);
       toast.success("Blood pressure reading saved successfully!");
       setManualForm({ sys: '', dia: '', pulse: '' });
       setOcrResult(null);

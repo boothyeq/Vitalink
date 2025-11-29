@@ -413,6 +413,15 @@ app.get('/patient/reminders', async (req, res) => {
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
   return res.status(200).json({ reminders: [] })
 })
+const getPatientsRoute = require('./routes/admin/getPatients')(supabase);
+const adminLoginRoute = require('./routes/admin/login')(supabase);
+
+app.get('/api/admin/patients', getPatientsRoute);
+app.post('/api/admin/login', adminLoginRoute);
+
+// OLD ROUTE - Disabled because it requires Supabase Auth service role key
+// Use the new admin system with /api/admin/patients instead
+/*
 app.get('/admin/auth-users', async (req, res) => {
   const r = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 })
   if (r.error) return res.status(400).json({ error: r.error.message })
@@ -420,6 +429,7 @@ app.get('/admin/auth-users', async (req, res) => {
   const out = users.map((u) => ({ id: u.id, email: u.email, created_at: u.created_at, role: (u.app_metadata && u.app_metadata.role) || null }))
   return res.status(200).json({ users: out })
 })
+*/
 app.post('/admin/auth-generate-link', async (req, res) => {
   const email = req.body && req.body.email
   if (!email) return res.status(400).json({ error: 'missing email' })

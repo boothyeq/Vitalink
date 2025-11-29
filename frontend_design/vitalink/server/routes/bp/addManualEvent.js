@@ -32,14 +32,16 @@ async function checkDuplicateReading(supabase, patientId, sys, dia, pulse) {
 }
 
 module.exports = (supabase) => async (req, res) => {
-    const { type, value1, value2, value3 } = req.body;
+    const { type, value1, value2, value3, patientId } = req.body;
 
     // Only handle blood_pressure type for bp_readings table
     if (type !== 'blood_pressure') {
         return res.status(400).json({ error: 'Only blood_pressure type is supported.' });
     }
 
-    const MOCK_USER_ID = process.env.MOCK_USER_ID || '00000000-0000-0000-0000-000000000001';
+    if (!patientId) {
+        return res.status(400).json({ error: 'Patient ID is required.' });
+    }
 
     const sys = value1 ? parseInt(value1, 10) : null;
     const dia = value2 ? parseInt(value2, 10) : null;
@@ -50,7 +52,7 @@ module.exports = (supabase) => async (req, res) => {
     }
 
     // Check for duplicate
-    const isDuplicate = await checkDuplicateReading(supabase, MOCK_USER_ID, sys, dia, pulse);
+    const isDuplicate = await checkDuplicateReading(supabase, patientId, sys, dia, pulse);
     if (isDuplicate) {
         return res.status(400).json({
             error: 'Duplicate reading detected. Please wait at least 10 seconds before recording another similar reading.'
@@ -62,7 +64,7 @@ module.exports = (supabase) => async (req, res) => {
     const readingTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
 
     let insertData = {
-        patient_id: MOCK_USER_ID,
+        patient_id: patientId,
         reading_date: readingDate,
         reading_time: readingTime,
         systolic: sys,

@@ -13,6 +13,10 @@ import NotFound from "./pages/NotFound"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
 import RequireAuth from "./components/RequireAuth"
+import RequireAdmin from "./components/RequireAdmin"
+import PatientList from "./pages/admin/PatientList"
+import PatientDetail from "./pages/admin/PatientDetail"
+import AdminLogin from "./pages/admin/AdminLogin"
 
 const queryClient = new QueryClient()
 
@@ -30,6 +34,12 @@ const App = () => (
             <Route path="/vitals" element={<RequireAuth><VitalsTracker /></RequireAuth>} />
             <Route path="/education" element={<RequireAuth><Education /></RequireAuth>} />
             <Route path="/contact" element={<RequireAuth><Contact /></RequireAuth>} />
+
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/patients" element={<RequireAdmin><PatientList /></RequireAdmin>} />
+            <Route path="/admin/patient/:id" element={<RequireAdmin><PatientDetail /></RequireAdmin>} />
+
             <Route path="/register" element={<Register />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<NotFound />} />

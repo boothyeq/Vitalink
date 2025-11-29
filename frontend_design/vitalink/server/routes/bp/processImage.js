@@ -49,7 +49,16 @@ module.exports = (supabase, uploadMiddleware) => async (req, res) => {
             return res.status(400).json({ error: 'No image file provided.' });
         }
 
+        // Get patientId from request body
+        const patientId = req.body.patientId;
+        if (!patientId) {
+            console.error('[processImage] No patientId provided');
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'Patient ID is required.' });
+        }
+
         console.log('[processImage] File received:', req.file.filename);
+        console.log('[processImage] Patient ID:', patientId);
 
         const imagePath = req.file.path;
         const scriptPath = path.join(__dirname, '../../digit_recognition_backend.py');
@@ -126,11 +135,9 @@ module.exports = (supabase, uploadMiddleware) => async (req, res) => {
                         return res.status(400).json({ error: 'PULSE value is out of range (30-240).' });
                     }
 
-                    const MOCK_USER_ID = process.env.MOCK_USER_ID || '00000000-0000-0000-0000-000000000001';
-
                     console.log('[processImage] Checking for duplicates...');
                     // Check for duplicate
-                    const isDuplicate = await checkDuplicateReading(supabase, MOCK_USER_ID, sys, dia, pulse);
+                    const isDuplicate = await checkDuplicateReading(supabase, patientId, sys, dia, pulse);
                     if (isDuplicate) {
                         console.log('[processImage] Duplicate detected');
                         return res.status(400).json({
@@ -144,7 +151,7 @@ module.exports = (supabase, uploadMiddleware) => async (req, res) => {
                     const readingTime = now.toTimeString().split(' ')[0];
 
                     let { error: supabaseError } = await supabase.from('bp_readings').insert([{
-                        patient_id: MOCK_USER_ID,
+                        patient_id: patientId,
                         reading_date: readingDate,
                         reading_time: readingTime,
                         systolic: sys,
