@@ -35,6 +35,11 @@ import android.view.View
 import android.graphics.Typeface
 import android.view.Gravity
 import java.time.format.DateTimeFormatter
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import androidx.core.app.NotificationManagerCompat
+import android.content.pm.PackageManager
+import android.Manifest
 
 class MainActivity : AppCompatActivity() {
 
@@ -114,7 +119,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnRead.setOnClickListener {
-            lifecycleScope.launch { ensurePatientExists(); readMetricsAndShow(txt); updateLastHourHrLabel(); updateTodayHrLabel(); updateHrDiagnostics(); syncTodayToServer() }
+            lifecycleScope.launch { ensurePatientExists(); readMetricsAndShow(txt); updateLastHourHrLabel(); updateTodayHrLabel(); updateHrDiagnostics(); syncTodayToServer(); refreshReminderNotifications() }
         }
 
         val scanPreview = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { _ -> }
@@ -139,6 +144,29 @@ class MainActivity : AppCompatActivity() {
                 startActivity(android.content.Intent(this@MainActivity, LoginActivity::class.java))
                 finish()
             }
+        }
+    }
+
+    private fun ensureChannel() {
+        val nm = getSystemService(NotificationManager::class.java)
+        val id = "reminders"
+        if (nm.getNotificationChannel(id) == null) {
+            val ch = NotificationChannel(id, "Reminders", NotificationManager.IMPORTANCE_DEFAULT)
+            nm.createNotificationChannel(ch)
+        }
+    }
+
+    private fun hasNotifPermission(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= 33) checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED else true
+    }
+
+    private suspend fun refreshReminderNotifications() {
+        ensureChannel()
+        if (!hasNotifPermission()) return
+        val pid = currentPatientId()
+        if (pid.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            ReminderScheduler.refresh(this@MainActivity, http, baseUrl, pid)
         }
     }
 
