@@ -10,6 +10,7 @@ import VitalsTracker from "./pages/VitalsTracker"
 import Education from "./pages/Education"
 import SelfCheck from "./pages/SelfCheck"
 import Contact from "./pages/Contact"
+import ScheduleReminder from "./pages/ScheduleReminder"
 import NotFound from "./pages/NotFound"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/vitals" element={<RequireAuth><VitalsTracker /></RequireAuth>} />
             <Route path="/education" element={<RequireAuth><Education /></RequireAuth>} />
             <Route path="/self-check" element={<RequireAuth><SelfCheck /></RequireAuth>} />
+            <Route path="/schedule" element={<RequireAuth><ScheduleReminder /></RequireAuth>} />
             <Route path="/contact" element={<RequireAuth><Contact /></RequireAuth>} />
             <Route path="/register" element={<Register />} />
             <Route path="/login" element={<Login />} />

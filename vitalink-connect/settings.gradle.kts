@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "VitalinkConnect"
+rootProject.name = "MyHFGuard"
 include(":app")
