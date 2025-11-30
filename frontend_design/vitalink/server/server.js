@@ -230,6 +230,17 @@ app.get('/patient/vitals', async (req, res) => {
       .order('date', { ascending: false })
       .limit(7)
     if (steps.error) return res.status(400).json({ error: steps.error.message })
+
+    // Fetch BP readings for the week
+    const bp = await supabase
+      .from('bp_readings')
+      .select('reading_date,reading_time,systolic,diastolic,pulse')
+      .eq('patient_id', pid)
+      .order('reading_date', { ascending: false })
+      .order('reading_time', { ascending: false })
+      .limit(50)
+    if (bp.error) return res.status(400).json({ error: bp.error.message })
+
     const hrDays = (hr.data || []).reverse()
     const dayKeys = hrDays.map((r) => r.date)
     const startKey = dayKeys[0]
@@ -286,7 +297,12 @@ app.get('/patient/vitals', async (req, res) => {
       hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
       spo2: (spo2.data || []).reverse().map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
       steps: (steps.data || []).reverse().map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
-      bp: [],
+      bp: (bp.data || []).reverse().map((r) => ({
+        time: `${r.reading_date}T${r.reading_time}`,
+        systolic: r.systolic,
+        diastolic: r.diastolic,
+        pulse: r.pulse
+      })),
       weight: [],
     }
   } else if (period === 'monthly') {
@@ -319,6 +335,18 @@ app.get('/patient/vitals', async (req, res) => {
       .lte('date', endStr)
       .order('date', { ascending: true })
     if (steps.error) return res.status(400).json({ error: steps.error.message })
+
+    // Fetch BP readings for the month
+    const bp = await supabase
+      .from('bp_readings')
+      .select('reading_date,reading_time,systolic,diastolic,pulse')
+      .eq('patient_id', pid)
+      .gte('reading_date', startStr)
+      .lte('reading_date', endStr)
+      .order('reading_date', { ascending: true })
+      .order('reading_time', { ascending: true })
+    if (bp.error) return res.status(400).json({ error: bp.error.message })
+
     const hrDays = (hr.data || [])
     let restingMap = new Map()
     if (startStr && endStr) {
@@ -372,7 +400,12 @@ app.get('/patient/vitals', async (req, res) => {
       hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
       spo2: (spo2.data || []).map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
       steps: (steps.data || []).map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
-      bp: [],
+      bp: (bp.data || []).map((r) => ({
+        time: `${r.reading_date}T${r.reading_time}`,
+        systolic: r.systolic,
+        diastolic: r.diastolic,
+        pulse: r.pulse
+      })),
       weight: [],
     }
   } else {
