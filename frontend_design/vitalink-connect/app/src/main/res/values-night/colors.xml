@@ -1,0 +1,11 @@
+<resources>
+    <color name="btnPrimary">#90CAF9</color>
+    <color name="btnOnPrimary">#0D47A1</color>
+    <color name="btnDanger">#EF9A9A</color>
+    <color name="btnOnDanger">#B71C1C</color>
+    <color name="btnOutlineText">#90CAF9</color>
+    <color name="bannerRequiredBg">#4E3E1E</color>
+    <color name="bannerRequiredAccent">#FFB300</color>
+    <color name="bannerGrantedBg">#2E3D2E</color>
+    <color name="bannerGrantedAccent">#66BB6A</color>
+</resources>
