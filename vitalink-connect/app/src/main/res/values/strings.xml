@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Vitalink Connect</string>
+    <string name="app_name">MyHFGuard</string>
     <string name="grant_permissions">Grant Permissions</string>
     <string name="read_steps">Read Steps</string>
     <string name="collect_health_data">Collect Health Data</string>

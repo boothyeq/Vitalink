@@ -87,7 +87,7 @@ const Dashboard = () => {
             <Smartphone className="h-4 w-4 text-primary" />
             <AlertDescription className="flex items-center justify-between">
               <span>
-                <strong>Sync Required:</strong> Last synced {lastAny ? formatDistanceToNow(lastAny, { addSuffix: true }) : "unknown"}. Open the native app to sync your latest data.
+                <strong>Sync Required:</strong> Last synced {lastAny ? formatDistanceToNow(lastAny, { addSuffix: true }) : "unknown"}. Open the MyHFGuard app to synch your latest data.
               </span>
               <Button variant="ghost" size="sm" onClick={() => setShowSyncNotice(false)} className="ml-4">
                 Dismiss

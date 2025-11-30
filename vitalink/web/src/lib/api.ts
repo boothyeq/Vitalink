@@ -76,7 +76,7 @@ export async function deletePatientReminder(patientId: string, id: string) {
 }
 
 export async function updatePatientReminder(payload: { patientId: string; id: string; title?: string; date?: string; notes?: string; tzOffsetMin?: number }) {
-  const url = `${serverUrl()}/patient/reminders/${encodeURIComponent(payload.id)}`
+  const url = `${serverUrl()}/patient/reminders-edit`
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const body = await res.json()
   if (!res.ok) return body

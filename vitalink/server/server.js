@@ -551,6 +551,60 @@ app.post('/patient/reminders', async (req, res) => {
   return res.status(200).json({ reminder: ins.data })
 })
 
+// Specific update route must come BEFORE the ":id" catch-all
+app.post('/patient/reminders/update', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const id = req.body && req.body.id
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date)
+      const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+      const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+      if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+    } catch (e) {}
+  }
+  const fields = {}
+  if (typeof title === 'string') fields.title = title
+  if (typeof date === 'string') fields.date = date
+  if (typeof notes === 'string' || notes === null) fields.notes = notes
+  if (typeof tzOffsetMin === 'number') fields.tz_offset_min = tzOffsetMin
+  const upd = await supabase.from('patient_reminder').update(fields).eq('id', id).eq('patient_id', pid).select('id,date,title,notes').single()
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ reminder: upd.data })
+})
+app.post('/patient/reminders-edit', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const id = req.body && req.body.id
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date)
+      const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+      const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+      if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+    } catch (e) {}
+  }
+  const fields = {}
+  if (typeof title === 'string') fields.title = title
+  if (typeof date === 'string') fields.date = date
+  if (typeof notes === 'string' || notes === null) fields.notes = notes
+  if (typeof tzOffsetMin === 'number') fields.tz_offset_min = tzOffsetMin
+  const upd = await supabase.from('patient_reminder').update(fields).eq('id', id).eq('patient_id', pid).select('id,date,title,notes').single()
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ reminder: upd.data })
+})
+
 app.patch('/patient/reminders/:id', async (req, res) => {
   const pid = req.body && req.body.patientId
   const id = req.params && req.params.id
@@ -581,6 +635,32 @@ app.patch('/patient/reminders/:id', async (req, res) => {
 app.post('/patient/reminders/:id', async (req, res) => {
   const pid = req.body && req.body.patientId
   const id = req.params && req.params.id
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date)
+      const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+      const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+      if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+    } catch (e) {}
+  }
+  const fields = {}
+  if (typeof title === 'string') fields.title = title
+  if (typeof date === 'string') fields.date = date
+  if (typeof notes === 'string' || notes === null) fields.notes = notes
+  if (typeof tzOffsetMin === 'number') fields.tz_offset_min = tzOffsetMin
+  const upd = await supabase.from('patient_reminder').update(fields).eq('id', id).eq('patient_id', pid).select('id,date,title,notes').single()
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ reminder: upd.data })
+})
+app.post('/patient/reminders/update', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const id = req.body && req.body.id
   const title = req.body && req.body.title
   const date = req.body && req.body.date
   const notes = (req.body && req.body.notes) || null
