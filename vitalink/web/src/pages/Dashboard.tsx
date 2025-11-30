@@ -61,6 +61,7 @@ const Dashboard = () => {
   const bpD = summary.bpDiastolic ?? "--";
   const weight = summary.weightKg ?? "--";
   const stepsToday = summary.stepsToday ?? "--";
+  const distanceToday = summary.distanceToday ?? "--";
   const vitals = vitalsQuery.data?.vitals || {};
   const latestTime = (arr?: Array<{ time: string }>) => {
     const t = arr && arr.length ? arr[arr.length - 1]?.time : undefined;
@@ -113,7 +114,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <Card className="p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -190,6 +191,22 @@ const Dashboard = () => {
               </div>
               <div className="p-3 bg-accent/10 rounded-full">
                 <Footprints className="w-6 h-6 text-accent" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Distance Walked Today</p>
+                {isLoading ? (
+                  <Skeleton className="h-6 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-foreground">{distanceToday} {distanceToday !== "--" && "m"}</p>
+                )}
+              </div>
+              <div className="p-3 bg-secondary/10 rounded-full">
+                <Activity className="w-6 h-6 text-secondary" />
               </div>
             </div>
           </Card>

@@ -32,6 +32,29 @@ object ReminderScheduler {
                 }
             }
         } catch (_: Exception) {}
+
+        try {
+            val req = Request.Builder().url(baseUrl + "/patient/medications?patientId=" + java.net.URLEncoder.encode(patientId, "UTF-8")).get().build()
+            val resp = http.newCall(req).execute()
+            resp.use {
+                if (it.code == 200) {
+                    val body = it.body?.string() ?: "{}"
+                    val obj = JSONObject(body)
+                    val prefs = obj.optJSONObject("preferences") ?: JSONObject()
+                    val hour = prefs.optInt("notify_hour", 9)
+                    if (prefs.optBoolean("beta_blockers", false)) scheduleDaily(context, 11001, "Take Beta blockers", hour)
+                    if (prefs.optBoolean("raas_inhibitors", false)) scheduleDaily(context, 11002, "Take RAAS inhibitors", hour)
+                    if (prefs.optBoolean("mras", false)) scheduleDaily(context, 11003, "Take MRAs", hour)
+                    if (prefs.optBoolean("sglt2_inhibitors", false)) scheduleDaily(context, 11004, "Take SGLT2 inhibitors", hour)
+                    if (prefs.optBoolean("statin", false)) scheduleDaily(context, 11005, "Take Statin", hour)
+                }
+            }
+        } catch (_: Exception) {}
+
+        runCatching {
+            scheduleDaily(context, 12001, "Measure weight", 8)
+            scheduleDaily(context, 12002, "Measure blood pressure", 21)
+        }
     }
 
     private fun scheduleFor(context: Context, id: String, title: String, eventInstant: java.time.Instant) {
@@ -59,5 +82,19 @@ object ReminderScheduler {
 
     private fun setExact(am: AlarmManager, whenMs: Long, pi: PendingIntent) {
         am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMs, pi)
+    }
+
+    private fun scheduleDaily(context: Context, requestCode: Int, title: String, hour: Int) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ReminderReceiver::class.java)
+        intent.putExtra("title", title)
+        val pi = PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        try { am.cancel(pi) } catch (_: Exception) {}
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        if (cal.timeInMillis < System.currentTimeMillis()) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        am.setRepeating(AlarmManager.RTC_WAKEUP, cal.timeInMillis, AlarmManager.INTERVAL_DAY, pi)
     }
 }

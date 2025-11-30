@@ -19,6 +19,7 @@ export type PatientSummary = {
   weightKg?: number
   nextAppointmentDate?: string
   stepsToday?: number
+  distanceToday?: number
 }
 
 // removed implicit session-based patient id; caller must provide patientId explicitly
@@ -81,6 +82,28 @@ export async function updatePatientReminder(payload: { patientId: string; id: st
   const body = await res.json()
   if (!res.ok) return body
   return body as { reminder: { id: string; date: string; title: string; notes?: string } }
+}
+
+export type MedicationPreferences = {
+  beta_blockers: boolean
+  raas_inhibitors: boolean
+  mras: boolean
+  sglt2_inhibitors: boolean
+  statin: boolean
+  notify_hour: number
+}
+
+export async function getPatientMedications(patientId?: string) {
+  const pid = patientId
+  const url = pid ? `${serverUrl()}/patient/medications?patientId=${encodeURIComponent(pid)}` : `${serverUrl()}/patient/medications`
+  const res = await fetch(url)
+  if (!res.ok) return { preferences: { beta_blockers: false, raas_inhibitors: false, mras: false, sglt2_inhibitors: false, statin: false, notify_hour: 9 } as MedicationPreferences }
+  return res.json() as Promise<{ preferences: MedicationPreferences }>
+}
+
+export async function savePatientMedications(payload: { patientId: string } & Partial<MedicationPreferences>) {
+  const res = await fetch(`${serverUrl()}/patient/medications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  return res.json() as Promise<{ ok: boolean }>
 }
 
 export type PatientInfo = { patient?: { patient_id: string; first_name?: string; last_name?: string; dob?: string }, devicesCount?: number, warnings?: string[] }
