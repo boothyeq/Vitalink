@@ -62,6 +62,27 @@ export async function getPatientReminders(patientId?: string) {
   return res.json() as Promise<{ reminders: PatientReminders }>
 }
 
+export async function createPatientReminder(payload: { patientId: string; title: string; date: string; notes?: string; tzOffsetMin?: number }) {
+  const res = await fetch(`${serverUrl()}/patient/reminders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const body = await res.json()
+  if (!res.ok) return body
+  return body as { reminder: { id: string; date: string; title: string; notes?: string } }
+}
+
+export async function deletePatientReminder(patientId: string, id: string) {
+  const url = `${serverUrl()}/patient/reminders/${encodeURIComponent(id)}?patientId=${encodeURIComponent(patientId)}`
+  const res = await fetch(url, { method: 'DELETE' })
+  return res.json() as Promise<{ ok: boolean; id: string }>
+}
+
+export async function updatePatientReminder(payload: { patientId: string; id: string; title?: string; date?: string; notes?: string; tzOffsetMin?: number }) {
+  const url = `${serverUrl()}/patient/reminders/${encodeURIComponent(payload.id)}`
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const body = await res.json()
+  if (!res.ok) return body
+  return body as { reminder: { id: string; date: string; title: string; notes?: string } }
+}
+
 export type PatientInfo = { patient?: { patient_id: string; first_name?: string; last_name?: string; dob?: string }, devicesCount?: number, warnings?: string[] }
 
 export async function getPatientInfo(patientId?: string) {

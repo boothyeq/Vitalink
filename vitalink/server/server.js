@@ -6,7 +6,7 @@ app.use(express.json({ limit: '5mb' }))
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS')
   if (req.method === 'OPTIONS') return res.sendStatus(200)
   next()
 })
@@ -184,6 +184,42 @@ app.get('/admin/check-data', async (req, res) => {
     latestSymptoms: symptoms.error ? null : ((symptoms.data || [])[0] || null),
     symptomsError: symptoms.error ? symptoms.error.message : null,
     weightError: weight.error ? weight.error.message : null,
+  }
+  return res.status(200).json(out)
+})
+app.get('/admin/hr-dates', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const rows = await supabase
+    .from('hr_day')
+    .select('date,hr_min,hr_max,hr_avg,hr_count')
+    .eq('patient_id', pid)
+    .order('date', { ascending: true })
+  if (rows.error) return res.status(400).json({ error: rows.error.message })
+  return res.status(200).json({ count: (rows.data || []).length, dates: (rows.data || []).map(r => r.date) })
+})
+app.post('/admin/wipe-hr', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const sinceDate = req.body && req.body.sinceDate
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const vp = await validatePatientId(pid)
+  if (!vp.ok && !supabaseMock) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const out = {}
+  if (sinceDate) {
+    const startTs = `${sinceDate}T00:00:00.000Z`
+    const ddel = await supabase.from('hr_day').delete().eq('patient_id', pid).gte('date', sinceDate)
+    const hdel = await supabase.from('hr_hour').delete().eq('patient_id', pid).gte('hour_ts', startTs)
+    const sdel = await supabase.from('hr_sample').delete().eq('patient_id', pid).gte('time_ts', startTs)
+    out.hr_day = { count: (ddel.data || []).length, error: ddel.error ? ddel.error.message : null }
+    out.hr_hour = { count: (hdel.data || []).length, error: hdel.error ? hdel.error.message : null }
+    out.hr_sample = { count: (sdel.data || []).length, error: sdel.error ? sdel.error.message : null }
+  } else {
+    const ddel = await supabase.from('hr_day').delete().eq('patient_id', pid)
+    const hdel = await supabase.from('hr_hour').delete().eq('patient_id', pid)
+    const sdel = await supabase.from('hr_sample').delete().eq('patient_id', pid)
+    out.hr_day = { count: (ddel.data || []).length, error: ddel.error ? ddel.error.message : null }
+    out.hr_hour = { count: (hdel.data || []).length, error: hdel.error ? hdel.error.message : null }
+    out.hr_sample = { count: (sdel.data || []).length, error: sdel.error ? sdel.error.message : null }
   }
   return res.status(200).json(out)
 })
@@ -483,7 +519,99 @@ app.get('/patient/vitals', async (req, res) => {
 app.get('/patient/reminders', async (req, res) => {
   const pid = (req.query && req.query.patientId)
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
-  return res.status(200).json({ reminders: [] })
+  const nowIso = new Date().toISOString()
+  const r = await supabase
+    .from('patient_reminder')
+    .select('id,patient_id,date,title,notes')
+    .eq('patient_id', pid)
+    .gte('date', nowIso)
+    .order('date', { ascending: true })
+    .limit(20)
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const reminders = (r.data || []).map((x) => ({ id: x.id, date: x.date, title: x.title, notes: x.notes || '' }))
+  return res.status(200).json({ reminders })
+})
+
+app.post('/patient/reminders', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !title || !date) return res.status(400).json({ error: 'missing patientId, title or date' })
+  try {
+    const d = new Date(date)
+    const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+    const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+    if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+  } catch (e) {}
+  const ins = await supabase.from('patient_reminder').insert([{ patient_id: pid, title, notes, date, tz_offset_min: tzOffsetMin }]).select('id,date,title,notes').single()
+  if (ins.error) return res.status(400).json({ error: ins.error.message })
+  return res.status(200).json({ reminder: ins.data })
+})
+
+app.patch('/patient/reminders/:id', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const id = req.params && req.params.id
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date)
+      const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+      const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+      if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+    } catch (e) {}
+  }
+  const fields = {}
+  if (typeof title === 'string') fields.title = title
+  if (typeof date === 'string') fields.date = date
+  if (typeof notes === 'string' || notes === null) fields.notes = notes
+  if (typeof tzOffsetMin === 'number') fields.tz_offset_min = tzOffsetMin
+  const upd = await supabase.from('patient_reminder').update(fields).eq('id', id).eq('patient_id', pid).select('id,date,title,notes').single()
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ reminder: upd.data })
+})
+// Fallback for environments with CORS issues on PATCH: allow POST to update
+app.post('/patient/reminders/:id', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  const id = req.params && req.params.id
+  const title = req.body && req.body.title
+  const date = req.body && req.body.date
+  const notes = (req.body && req.body.notes) || null
+  const tzOffsetMinRaw = req.body && req.body.tzOffsetMin
+  const tzOffsetMin = typeof tzOffsetMinRaw === 'number' ? tzOffsetMinRaw : (typeof tzOffsetMinRaw === 'string' ? parseInt(tzOffsetMinRaw, 10) : null)
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date)
+      const local = typeof tzOffsetMin === 'number' ? new Date(d.getTime() + tzOffsetMin * 60000) : d
+      const hour = typeof tzOffsetMin === 'number' ? local.getUTCHours() : local.getHours()
+      if (hour < 8 || hour > 22) return res.status(400).json({ error: 'appointment time must be between 08:00 and 22:00 local time' })
+    } catch (e) {}
+  }
+  const fields = {}
+  if (typeof title === 'string') fields.title = title
+  if (typeof date === 'string') fields.date = date
+  if (typeof notes === 'string' || notes === null) fields.notes = notes
+  if (typeof tzOffsetMin === 'number') fields.tz_offset_min = tzOffsetMin
+  const upd = await supabase.from('patient_reminder').update(fields).eq('id', id).eq('patient_id', pid).select('id,date,title,notes').single()
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ reminder: upd.data })
+})
+
+app.delete('/patient/reminders/:id', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  const id = req.params && req.params.id
+  if (!pid || !id) return res.status(400).json({ error: 'missing patientId or id' })
+  const del = await supabase.from('patient_reminder').delete().eq('id', id).eq('patient_id', pid)
+  if (del.error) return res.status(400).json({ error: del.error.message })
+  return res.status(200).json({ ok: true, id })
 })
 app.get('/admin/auth-users', async (req, res) => {
   const r = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 })
@@ -770,6 +898,8 @@ app.post('/ingest/hr-samples', async (req, res) => {
   const dayAgg = new Map()
   for (const i of items) {
     const offset = i.tzOffsetMin || 0
+    // TODO(hr_hour): ensure hourly buckets are aligned exactly on the hour (00:00 minutes, seconds, ms)
+    // Use toHourWithOffset to floor to the top of the hour; later verify hr_hour.hour_ts never has odd minutes/seconds
     const h = toHourWithOffset(i.timeTs, offset)
     const d = toDateWithOffset(i.timeTs, offset)
     const hk = `${i.patientId}|${h}`
@@ -791,6 +921,7 @@ app.post('/ingest/hr-samples', async (req, res) => {
   for (const [k, a] of hourAgg) {
     const [pid, h] = k.split('|')
     const avg = a.count ? a.sum / a.count : 0
+    // TODO(hr_hour): hour_ts must be at :00 on the dot; min/max/avg are per-hour aggregates
     hourRows.push({ patient_id: pid, hour_ts: h, hr_min: Math.round(a.min), hr_max: Math.round(a.max), hr_avg: avg, hr_count: a.count })
   }
   const dayRows = []

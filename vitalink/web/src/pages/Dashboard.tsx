@@ -96,15 +96,20 @@ const Dashboard = () => {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <Button size="lg" className="h-20 text-lg gap-3" onClick={() => navigate("/self-check")}>
-            <Plus className="w-6 h-6" />
-            Collect Data
-          </Button>
-          <Button size="lg" className="h-20 text-lg gap-3" variant="secondary" onClick={() => navigate("/self-check")}>
-            <Camera className="w-6 h-6" />
-            Capture Blood Pressure
-          </Button>
+        <div className="grid grid-cols-1 md:grid-cols-10 gap-4 mb-8">
+          <div className="md:col-span-7 mb-0">
+            <UpcomingReminders patientId={patientId} />
+          </div>
+          <div className="md:col-span-3 flex flex-col gap-4">
+            <Button size="lg" className="w-full h-20 text-lg gap-3" onClick={() => navigate(patientId ? `/self-check?patientId=${encodeURIComponent(patientId)}` : "/self-check")}>
+              <Plus className="w-6 h-6" />
+              Collect Data
+            </Button>
+            <Button size="lg" className="w-full h-20 text-lg gap-3" variant="secondary" onClick={() => navigate(patientId ? `/self-check?patientId=${encodeURIComponent(patientId)}` : "/self-check")}>
+              <Camera className="w-6 h-6" />
+              Capture Blood Pressure
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -190,19 +195,9 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Charts and Readings */}
-          <div className="lg:col-span-2 space-y-6">
-            <VitalsChart patientId={patientId} />
-            <RecentReadings patientId={patientId} />
-          </div>
-
-          {/* Right Column - Actions and Reminders */}
-          <div className="space-y-6">
-            <QuickActions />
-            <UpcomingReminders patientId={patientId} />
-          </div>
+        {/* Vital Trends - Full Width */}
+        <div className="mb-8">
+          <VitalsChart patientId={patientId} />
         </div>
       </div>
       <ThemeToggle />
