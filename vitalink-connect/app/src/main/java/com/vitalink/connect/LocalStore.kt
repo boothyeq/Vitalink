@@ -44,6 +44,18 @@ data class PendingSpo2(
     val tzOffsetMin: Int
 )
 
+@Entity(tableName = "pending_distance")
+data class PendingDistance(
+    @PrimaryKey val recordUid: String,
+    val patientId: String,
+    val originId: String,
+    val deviceId: String,
+    val startTs: String,
+    val endTs: String,
+    val meters: Long,
+    val tzOffsetMin: Int
+)
+
 @Dao
 interface PendingDao {
     @Insert
@@ -55,6 +67,9 @@ interface PendingDao {
     @Insert
     suspend fun insertSpo2(item: PendingSpo2)
 
+    @Insert
+    suspend fun insertDistance(item: PendingDistance)
+
     @Query("SELECT * FROM pending_steps LIMIT :limit")
     suspend fun getSteps(limit: Int = 500): List<PendingSteps>
 
@@ -64,6 +79,9 @@ interface PendingDao {
     @Query("SELECT * FROM pending_spo2 LIMIT :limit")
     suspend fun getSpo2(limit: Int = 1000): List<PendingSpo2>
 
+    @Query("SELECT * FROM pending_distance LIMIT :limit")
+    suspend fun getDistance(limit: Int = 500): List<PendingDistance>
+
     @Query("DELETE FROM pending_steps WHERE recordUid IN (:uids)")
     suspend fun deleteSteps(uids: List<String>)
 
@@ -72,16 +90,19 @@ interface PendingDao {
 
     @Query("DELETE FROM pending_spo2 WHERE recordUid IN (:uids)")
     suspend fun deleteSpo2(uids: List<String>)
+
+    @Query("DELETE FROM pending_distance WHERE recordUid IN (:uids)")
+    suspend fun deleteDistance(uids: List<String>)
 }
 
-@Database(entities = [PendingSteps::class, PendingHr::class, PendingSpo2::class], version = 1, exportSchema = false)
+@Database(entities = [PendingSteps::class, PendingHr::class, PendingSpo2::class, PendingDistance::class], version = 2, exportSchema = false)
 abstract class LocalDb : RoomDatabase() {
     abstract fun dao(): PendingDao
 
     companion object {
         @Volatile private var INSTANCE: LocalDb? = null
         fun get(context: Context): LocalDb = INSTANCE ?: synchronized(this) {
-            val inst = Room.databaseBuilder(context.applicationContext, LocalDb::class.java, "vitalink_local").build()
+            val inst = Room.databaseBuilder(context.applicationContext, LocalDb::class.java, "vitalink_local").fallbackToDestructiveMigration().build()
             INSTANCE = inst
             inst
         }

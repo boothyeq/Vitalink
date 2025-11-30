@@ -9,6 +9,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -53,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private val originId = "android_health_connect"
     private val permissions: Set<String> = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
+        HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class)
     )
@@ -609,6 +611,12 @@ class MainActivity : AppCompatActivity() {
                     timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
                 )
             ).records
+            val distanceToday = client.readRecords(
+                ReadRecordsRequest(
+                    DistanceRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
+                )
+            ).records
             val hrToday = client.readRecords(
                 ReadRecordsRequest(
                     HeartRateRecord::class,
@@ -633,7 +641,14 @@ class MainActivity : AppCompatActivity() {
                     val uid = patientId + "|" + originId + "|" + deviceId + "|" + start.toEpochMilli() + "|" + end.toEpochMilli() + "|" + r.count
                     dao.insertSteps(PendingSteps(uid, patientId, originId, deviceId, start.toString(), end.toString(), r.count, offsetMin))
                 }
+                distanceToday.forEach { r ->
+                    val start = r.startTime; val end = r.endTime
+                    val meters = r.distance.inMeters
+                    val uid = patientId + "|" + originId + "|" + deviceId + "|" + start.toEpochMilli() + "|" + end.toEpochMilli() + "|" + meters
+                    dao.insertDistance(PendingDistance(uid, patientId, originId, deviceId, start.toString(), end.toString(), meters, offsetMin))
+                }
                 hrToday.forEach { rec ->
+                
                     rec.samples.forEach { s ->
                         val t = s.time
                         val uid = patientId + "|" + originId + "|" + deviceId + "|" + t.toEpochMilli() + "|" + s.beatsPerMinute
@@ -656,6 +671,12 @@ class MainActivity : AppCompatActivity() {
         val stepsToday = client.readRecords(
             ReadRecordsRequest(
                 StepsRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
+            )
+        ).records
+        val distanceToday = client.readRecords(
+            ReadRecordsRequest(
+                DistanceRecord::class,
                 timeRangeFilter = TimeRangeFilter.between(startOfToday, nowInstant)
             )
         ).records
@@ -694,6 +715,24 @@ class MainActivity : AppCompatActivity() {
                 "\"startTs\":\"" + start.toString() + "\"," +
                 "\"endTs\":\"" + end.toString() + "\"," +
                 "\"count\":" + r.count + "," +
+                "\"recordUid\":\"" + uid + "\"," +
+                "\"firstName\":\"" + firstName + "\"," +
+                "\"lastName\":\"" + lastName + "\"," +
+                "\"tzOffsetMin\":" + offsetMin +
+            "}"
+        }
+        val distanceItems = distanceToday.map { r ->
+            val start = r.startTime
+            val end = r.endTime
+            val meters = r.distance.inMeters
+            val uid = patientId + "|" + originId + "|" + deviceId + "|" + start.toEpochMilli() + "|" + end.toEpochMilli() + "|" + meters
+            "{" +
+                "\"patientId\":\"" + patientId + "\"," +
+                "\"originId\":\"" + originId + "\"," +
+                "\"deviceId\":\"" + deviceId + "\"," +
+                "\"startTs\":\"" + start.toString() + "\"," +
+                "\"endTs\":\"" + end.toString() + "\"," +
+                "\"meters\":" + meters + "," +
                 "\"recordUid\":\"" + uid + "\"," +
                 "\"firstName\":\"" + firstName + "\"," +
                 "\"lastName\":\"" + lastName + "\"," +
@@ -764,18 +803,22 @@ class MainActivity : AppCompatActivity() {
             "}"
         }
         val stepsJson = "[" + stepsItems.joinToString(",") + "]"
+        val distanceJson = "[" + distanceItems.joinToString(",") + "]"
         val hrJson = "[" + hrItems.joinToString(",") + "]"
         val spo2Json = "[" + spo2Items.joinToString(",") + "]"
         val jsonType = "application/json".toMediaType()
         val stepsBody: RequestBody = stepsJson.toRequestBody(jsonType)
+        val distanceBody: RequestBody = distanceJson.toRequestBody(jsonType)
         val hrBody: RequestBody = hrJson.toRequestBody(jsonType)
         val spo2Body: RequestBody = spo2Json.toRequestBody(jsonType)
         val stepsReq = Request.Builder().url(baseUrl + "/ingest/steps-events").post(stepsBody).build()
+        val distanceReq = Request.Builder().url(baseUrl + "/ingest/distance-events").post(distanceBody).build()
         val hrReq = Request.Builder().url(baseUrl + "/ingest/hr-samples").post(hrBody).build()
         val spo2Req = Request.Builder().url(baseUrl + "/ingest/spo2-samples").post(spo2Body).build()
         var status = ""
         withContext(Dispatchers.IO) {
             val stepsCount = stepsItems.size
+            val distanceCount = distanceItems.size
             val hrCount = hrItems.size
             val spo2Count = spo2Items.size
             try {
@@ -785,6 +828,14 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (_: Exception) {
                 status = "steps=" + stepsCount + ", error"
+            }
+            try {
+                val resp = http.newCall(distanceReq).execute()
+                resp.use {
+                    status = status + "; distance=" + distanceCount + ", code=" + it.code
+                }
+            } catch (_: Exception) {
+                status = status + "; distance=" + distanceCount + ", error"
             }
             try {
                 val resp = http.newCall(hrReq).execute()
@@ -831,6 +882,25 @@ class MainActivity : AppCompatActivity() {
                     val req = Request.Builder().url(baseUrl + "/ingest/steps-events").post(body).build()
                     val resp = http.newCall(req).execute()
                     resp.use { if (it.code == 200) dao.deleteSteps(queuedSteps.map { q -> q.recordUid }) }
+                }
+                val queuedDistance = dao.getDistance(500)
+                if (queuedDistance.isNotEmpty()) {
+                    val payload = queuedDistance.map { i ->
+                        "{" +
+                            "\"patientId\":\"" + i.patientId + "\"," +
+                            "\"originId\":\"" + i.originId + "\"," +
+                            "\"deviceId\":\"" + i.deviceId + "\"," +
+                            "\"startTs\":\"" + i.startTs + "\"," +
+                            "\"endTs\":\"" + i.endTs + "\"," +
+                            "\"meters\":" + i.meters + "," +
+                            "\"recordUid\":\"" + i.recordUid + "\"," +
+                            "\"tzOffsetMin\":" + i.tzOffsetMin +
+                        "}"
+                    }
+                    val body = ("[" + payload.joinToString(",") + "]").toRequestBody(jsonType)
+                    val req = Request.Builder().url(baseUrl + "/ingest/distance-events").post(body).build()
+                    val resp = http.newCall(req).execute()
+                    resp.use { if (it.code == 200) dao.deleteDistance(queuedDistance.map { q -> q.recordUid }) }
                 }
                 val queuedHr = dao.getHr(1000)
                 if (queuedHr.isNotEmpty()) {

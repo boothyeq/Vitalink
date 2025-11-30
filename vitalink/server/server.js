@@ -252,6 +252,9 @@ app.get('/patient/summary', async (req, res) => {
   const st = await supabase.from('steps_day').select('date,steps_total').eq('patient_id', pid).order('date', { ascending: false }).range(0, 0)
   if (st.error) return res.status(400).json({ error: st.error.message })
   const srow = (st.data && st.data[0]) || null
+  const dist = await supabase.from('distance_day').select('date,meters_total').eq('patient_id', pid).order('date', { ascending: false }).range(0, 0)
+  if (dist.error) return res.status(400).json({ error: dist.error.message })
+  const drow = (dist.data && dist.data[0]) || null
   const bp = await supabase.from('bp_sample').select('time_ts,systolic_mmhg,diastolic_mmhg').eq('patient_id', pid).order('time_ts', { ascending: false }).range(0, 0)
   if (bp.error) return res.status(400).json({ error: bp.error.message })
   const brow = (bp.data && bp.data[0]) || null
@@ -265,6 +268,7 @@ app.get('/patient/summary', async (req, res) => {
     weightKg: wrow ? wrow.kg || null : null,
     nextAppointmentDate: null,
     stepsToday: srow ? Math.round(srow.steps_total || 0) : null,
+    distanceToday: drow ? Math.round(drow.meters_total || 0) : null,
   }
   return res.status(200).json({ summary })
 })
@@ -945,6 +949,54 @@ app.post('/ingest/steps-events', async (req, res) => {
   }
   return res.status(200).json({ inserted: (ins.data || []).length, upserted_hour: hourRows.length, upserted_day: dayRows.length })
 })
+app.post('/ingest/distance-events', async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : [req.body]
+  if (!items.length) return res.status(200).json({ inserted: 0, upserted_day: 0 })
+  const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
+  const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
+  if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
+  const eo = await ensureOrigins(origins)
+  if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
+  const ed = await ensureDevices(devices, patientId)
+  if (!ed.ok) return res.status(400).json({ error: `device upsert failed: ${ed.error}` })
+  const raw = items.map((i) => ({
+    patient_id: i.patientId,
+    origin_id: i.originId,
+    device_id: i.deviceId,
+    start_ts: i.startTs,
+    end_ts: i.endTs,
+    meters: i.meters,
+    record_uid: i.recordUid,
+  }))
+  const ins = await supabase.from('distance_event').upsert(raw, { onConflict: 'record_uid', ignoreDuplicates: true })
+  if (ins.error) {
+    console.error('distance_event upsert error', ins.error)
+    return res.status(400).json({ error: ins.error.message })
+  }
+  const byDay = new Map()
+  for (const i of items) {
+    const offset = i.tzOffsetMin || 0
+    const d = toDateWithOffset(i.endTs, offset)
+    const dk = `${i.patientId}|${d}`
+    byDay.set(dk, (byDay.get(dk) || 0) + (i.meters || 0))
+  }
+  const dayRows = []
+  for (const [k, v] of byDay) {
+    const [pid, d] = k.split('|')
+    dayRows.push({ patient_id: pid, date: d, meters_total: v })
+  }
+  const upd = await supabase.from('distance_day').upsert(dayRows, { onConflict: 'patient_id,date' })
+  if (upd.error) {
+    console.error('distance_day upsert error', upd.error)
+    return res.status(400).json({ error: upd.error.message })
+  }
+  return res.status(200).json({ inserted: (ins.data || []).length, upserted_day: dayRows.length })
+})
 app.post('/ingest/hr-samples', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
   // console.log('POST /ingest/hr-samples', { count: items.length })
@@ -1256,6 +1308,63 @@ app.post('/ingest/symptom-log', async (req, res) => {
     if (ins.error) return res.status(400).json({ error: ins.error.message })
     return res.status(200).json({ inserted: (ins.data || []).length })
   }
+})
+// Medication preferences
+app.get('/patient/medications', async (req, res) => {
+  const pid = (req.query && req.query.patientId)
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const r = await supabase
+    .from('medication')
+    .select('class,active')
+    .eq('patient_id', pid)
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const arr = r.data || []
+  const has = (cls) => arr.some((m) => (m.class || '').toLowerCase() === cls && m.active === true)
+  const prefs = {
+    beta_blockers: has('beta_blockers'),
+    raas_inhibitors: has('raas_inhibitors'),
+    mras: has('mras'),
+    sglt2_inhibitors: has('sglt2_inhibitors'),
+    statin: has('statin'),
+    notify_hour: 9,
+  }
+  return res.status(200).json({ preferences: prefs })
+})
+app.post('/patient/medications', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const vp = await validatePatientId(pid)
+  if (!vp.ok && !supabaseMock) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const desired = [
+    { cls: 'beta_blockers', active: !!(req.body && req.body.beta_blockers) },
+    { cls: 'raas_inhibitors', active: !!(req.body && req.body.raas_inhibitors) },
+    { cls: 'mras', active: !!(req.body && req.body.mras) },
+    { cls: 'sglt2_inhibitors', active: !!(req.body && req.body.sglt2_inhibitors) },
+    { cls: 'statin', active: !!(req.body && req.body.statin) },
+  ]
+  for (const d of desired) {
+    const existing = await supabase
+      .from('medication')
+      .select('id,active')
+      .eq('patient_id', pid)
+      .eq('class', d.cls)
+      .range(0, 0)
+    if (existing.error) return res.status(400).json({ error: existing.error.message })
+    const row = (existing.data && existing.data[0]) || null
+    if (row) {
+      const upd = await supabase
+        .from('medication')
+        .update({ active: d.active, updated_at: new Date().toISOString() })
+        .eq('id', row.id)
+      if (upd.error) return res.status(400).json({ error: upd.error.message })
+    } else {
+      const ins = await supabase
+        .from('medication')
+        .insert([{ patient_id: pid, name: d.cls, class: d.cls, dosage: null, instructions: null, active: d.active }])
+      if (ins.error) return res.status(400).json({ error: ins.error.message })
+    }
+  }
+  return res.status(200).json({ ok: true })
 })
 const port = process.env.PORT || 3001
 app.listen(port, () => process.stdout.write(`server:${port}\n`))
