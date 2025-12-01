@@ -73,8 +73,14 @@ module.exports = (supabase, uploadMiddleware) => async (req, res) => {
         }
 
         console.log('[processImage] Starting Python process...');
-        const pythonArgs = ['python', scriptPath, imagePath];
+        // Use python3 explicitly for Linux/Docker environments
+        const pythonArgs = ['python3', scriptPath, imagePath];
         const pythonProcess = spawn(pythonArgs[0], pythonArgs.slice(1));
+
+        pythonProcess.on('error', (err) => {
+            console.error('[processImage] Failed to start Python process:', err);
+            return res.status(500).json({ error: 'Failed to start OCR process.', details: err.message });
+        });
 
         let rawOutput = '';
         let errorOutput = '';
