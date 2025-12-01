@@ -63,6 +63,65 @@ export async function getPatientReminders(patientId?: string) {
   return res.json() as Promise<{ reminders: PatientReminders }>
 }
 
+export async function processImage(file: File, patientId: string) {
+  const formData = new FormData()
+  formData.append('image', file)
+  formData.append('patientId', patientId)
+
+  const res = await fetch(`${serverUrl()}/api/process-image`, { method: 'POST', body: formData })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Failed to process image')
+  }
+  return res.json()
+}
+
+export async function addManualEvent(data: any, patientId: string) {
+  const res = await fetch(`${serverUrl()}/api/add-manual-event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...data, patientId }),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Failed to add event')
+  }
+  return res.json()
+}
+
+export async function getHealthEvents(userId?: string) {
+  const url = userId ? `${serverUrl()}/api/health-events?user_id=${encodeURIComponent(userId)}` : `${serverUrl()}/api/health-events`
+  const res = await fetch(url)
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Failed to fetch events')
+  }
+  return res.json()
+}
+
+export type PatientProfile = {
+  patient_id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  created_at: string | null
+  last_sign_in_at: string | null
+  date_of_birth?: string
+}
+
+export async function getPatients() {
+  const res = await fetch(`${serverUrl()}/api/admin/patients`)
+  if (!res.ok) throw new Error('Failed to fetch patients')
+  return res.json() as Promise<{ patients: PatientProfile[] }>
+}
+
+export async function getPatientProfile(patientId: string) {
+  const res = await fetch(`${serverUrl()}/api/admin/patients?patientId=${encodeURIComponent(patientId)}`)
+  if (!res.ok) throw new Error('Failed to fetch patient profile')
+  const data = await res.json()
+  return data.patients[0] as PatientProfile | undefined
+}
+
 export async function createPatientReminder(payload: { patientId: string; title: string; date: string; notes?: string; tzOffsetMin?: number }) {
   const res = await fetch(`${serverUrl()}/patient/reminders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const body = await res.json()
