@@ -436,20 +436,10 @@ app.get('/patient/vitals', async (req, res) => {
       steps: (steps.data || []).reverse().map((r) => ({ time: r.hour_ts, count: Math.round(r.steps_total || 0) })),
       bp: [],
       weight: [],
-      if(r.error) return res.status(400).json({ error: r.error.message })
-const data = r.data || {}
-const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
-const fragment = actionLink.split('#')[1]
-const base = redirect || 'http://localhost:5173/auth/callback'
-const callback_link = fragment ? `${base}#${fragment}` : null
-let verify_link = null
-if (!callback_link && actionLink.includes('redirect_to=')) {
-  const u = new URL(actionLink)
-  u.searchParams.set('redirect_to', base)
-  verify_link = u.toString()
-}
-return res.status(200).json({ data, callback_link, verify_link })
-  })
+    }
+  }
+  return res.status(200).json(out)
+})
 app.get('/admin/auth-generate-link', async (req, res) => {
   const email = req.query && req.query.email
   if (!email) return res.status(400).json({ error: 'missing email' })
