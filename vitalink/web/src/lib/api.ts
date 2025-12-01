@@ -1,9 +1,16 @@
 const DEFAULT_URL = 'http://localhost:3001'
+const DEFAULT_BP_URL = 'http://localhost:3001'
 
 export function serverUrl() {
   const fromEnv1 = import.meta.env.VITE_SERVER_URL as string | undefined
   const fromEnv2 = import.meta.env.VITE_API_URL as string | undefined
   return (fromEnv1 && fromEnv1.length > 0) ? fromEnv1 : ((fromEnv2 && fromEnv2.length > 0) ? fromEnv2 : DEFAULT_URL)
+}
+
+// Separate URL for BP (Blood Pressure) image processing backend
+export function bpServerUrl() {
+  const fromEnv = import.meta.env.VITE_BP_SERVER_URL as string | undefined
+  return (fromEnv && fromEnv.length > 0) ? fromEnv : serverUrl() // Fallback to main server if not specified
 }
 
 export async function getAdminSummary() {
@@ -68,7 +75,7 @@ export async function processImage(file: File, patientId: string) {
   formData.append('image', file)
   formData.append('patientId', patientId)
 
-  const res = await fetch(`${serverUrl()}/api/process-image`, { method: 'POST', body: formData })
+  const res = await fetch(`${bpServerUrl()}/api/process-image`, { method: 'POST', body: formData })
   if (!res.ok) {
     const error = await res.json()
     throw new Error(error.error || 'Failed to process image')
@@ -77,7 +84,7 @@ export async function processImage(file: File, patientId: string) {
 }
 
 export async function addManualEvent(data: any, patientId: string) {
-  const res = await fetch(`${serverUrl()}/api/add-manual-event`, {
+  const res = await fetch(`${bpServerUrl()}/api/add-manual-event`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...data, patientId }),
@@ -90,7 +97,7 @@ export async function addManualEvent(data: any, patientId: string) {
 }
 
 export async function getHealthEvents(userId?: string) {
-  const url = userId ? `${serverUrl()}/api/health-events?user_id=${encodeURIComponent(userId)}` : `${serverUrl()}/api/health-events`
+  const url = userId ? `${bpServerUrl()}/api/health-events?user_id=${encodeURIComponent(userId)}` : `${bpServerUrl()}/api/health-events`
   const res = await fetch(url)
   if (!res.ok) {
     const error = await res.json()
