@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { NavLink } from "@/components/NavLink"
-import { Heart, LayoutDashboard, BookOpen, Menu, ClipboardList, CalendarDays, LogOut, Pill } from "lucide-react"
+import { Heart, LayoutDashboard, BookOpen, Menu, ClipboardList, CalendarDays, LogOut, Pill, Activity, Phone, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { supabase } from "@/lib/supabase"
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/vitals", label: "Vitals", icon: Activity },
   { to: "/self-check", label: "Self Check", icon: ClipboardList },
   { to: "/schedule", label: "Schedule", icon: CalendarDays },
   { to: "/medication", label: "Medication", icon: Pill },
   { to: "/education", label: "Education", icon: BookOpen },
+  { to: "/contact", label: "Contact", icon: Phone },
 ]
 
 export default function Navigation() {
@@ -20,6 +22,7 @@ export default function Navigation() {
     typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("patientId") || undefined : undefined
   )
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [role, setRole] = useState<string | undefined>(undefined)
   useEffect(() => {
     let mounted = true
     async function init() {
@@ -27,11 +30,13 @@ export default function Navigation() {
       const { data } = await supabase.auth.getSession()
       const id = data?.session?.user?.id || undefined
       setIsLoggedIn(!!data?.session)
+      setRole((data?.session?.user as any)?.app_metadata?.role)
       if (mounted) setPid(id)
     }
     init()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session)
+      setRole((session?.user as any)?.app_metadata?.role)
       if (!pid) setPid(session?.user?.id || undefined)
     })
     return () => { mounted = false; subscription.unsubscribe() }
@@ -67,6 +72,16 @@ export default function Navigation() {
                 </NavLink>
               )
             })}
+            {isLoggedIn && role === "admin" && (
+              <NavLink
+                to="/admin/patients"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                activeClassName="text-primary bg-primary/10 font-medium"
+              >
+                <Shield className="w-4 h-4" />
+                Admin
+              </NavLink>
+            )}
             {isLoggedIn && (
               <Button variant="destructive" size="icon" onClick={handleLogout} aria-label="Logout" className="ml-2">
                 <LogOut className="w-4 h-4" />
@@ -97,6 +112,16 @@ export default function Navigation() {
                         </NavLink>
                       )
                     })}
+                    {isLoggedIn && role === "admin" && (
+                      <NavLink
+                        to="/admin/patients"
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                        activeClassName="text-primary bg-primary/10 font-medium"
+                      >
+                        <Shield className="w-5 h-5" />
+                        Admin
+                      </NavLink>
+                    )}
                     <Button variant="destructive" size="icon" onClick={handleLogout} aria-label="Logout">
                       <LogOut className="w-5 h-5" />
                     </Button>
