@@ -153,6 +153,151 @@ app.get('/admin/summary', async (req, res) => {
   return res.status(200).json({ summary: out })
 })
 
+// Get patient info for admin
+app.get('/admin/patient-info', async (req, res) => {
+  const pid = req.query && req.query.patientId
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  
+  try {
+    const patientRes = await supabase
+      .from('patients')
+      .select('patient_id, first_name, last_name, date_of_birth')
+      .eq('patient_id', pid)
+      .single()
+    
+    if (patientRes.error) {
+      return res.status(404).json({ error: 'Patient not found' })
+    }
+    
+    const devicesRes = await supabase
+      .from('devices')
+      .select('device_id')
+      .eq('patient_id', pid)
+    
+    const devicesCount = devicesRes.data ? devicesRes.data.length : 0
+    
+    return res.status(200).json({
+      patient: {
+        patient_id: patientRes.data.patient_id,
+        first_name: patientRes.data.first_name,
+        last_name: patientRes.data.last_name,
+        dob: patientRes.data.date_of_birth
+      },
+      devicesCount,
+      warnings: []
+    })
+  } catch (error) {
+    console.error('Error fetching patient info:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Get all patients for admin
+app.get('/api/admin/patients', async (req, res) => {
+  try {
+    const pid = req.query && req.query.patientId
+    
+    let query = supabase
+      .from('patients')
+      .select('patient_id, first_name, last_name, date_of_birth, created_at')
+    
+    if (pid) {
+      query = query.eq('patient_id', pid)
+    }
+    
+    const { data, error } = await query.limit(1000)
+    
+    if (error) {
+      return res.status(400).json({ error: error.message })
+    }
+    
+    const patientsWithAuth = await Promise.all((data || []).map(async (patient) => {
+      try {
+        const authRes = await supabase.auth.admin.getUserById(patient.patient_id)
+        return {
+          patient_id: patient.patient_id,
+          first_name: patient.first_name || 'User',
+          last_name: patient.last_name || 'Patient',
+          email: authRes.data?.user?.email || null,
+          created_at: authRes.data?.user?.created_at || patient.created_at,
+          last_sign_in_at: authRes.data?.user?.last_sign_in_at || null,
+          date_of_birth: patient.date_of_birth
+        }
+      } catch (err) {
+        return {
+          patient_id: patient.patient_id,
+          first_name: patient.first_name || 'User',
+          last_name: patient.last_name || 'Patient',
+          email: null,
+          created_at: patient.created_at,
+          last_sign_in_at: null,
+          date_of_birth: patient.date_of_birth
+        }
+      }
+    }))
+    
+    return res.status(200).json({ patients: patientsWithAuth })
+  } catch (error) {
+    console.error('Error fetching patients:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Admin login endpoint
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' })
+    }
+    
+    // Query the admins table
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('is_active', true)
+      .single()
+    
+    if (error || !data) {
+      return res.status(401).json({ error: 'Invalid email or password' })
+    }
+    
+    // Simple password check (in production, use bcrypt)
+    // For now, we'll check if password matches the stored hash
+    // You should replace this with proper bcrypt comparison
+    if (data.password_hash !== password && data.password_hash !== 'PLACEHOLDER') {
+      return res.status(401).json({ error: 'Invalid email or password' })
+    }
+    
+    // If password is PLACEHOLDER, accept any password (for initial setup)
+    // In production, you should hash the password properly
+    
+    // Update last login time
+    await supabase
+      .from('admins')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', data.id)
+    
+    // Return admin data (without password hash)
+    return res.status(200).json({
+      admin: {
+        id: data.id,
+        email: data.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        created_at: data.created_at,
+        last_login_at: new Date().toISOString()
+      }
+    })
+  } catch (error) {
+    console.error('Admin login error:', error)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+
 // --- Blood Pressure Module Routes ---
 
 // multer setup
