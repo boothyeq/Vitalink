@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,7 @@ const VitalsChart = ({ patientId }: Props) => {
   const [currentPeriod, setCurrentPeriod] = useState(new Date())
   const period = timePeriod === "weekly" ? "weekly" : (timePeriod === "monthly" ? "monthly" : "hourly")
   const { data, isLoading } = useQuery({
-    queryKey: ["patient-vitals", patientId, period, formatDate(currentPeriod, "yyyy-MM-dd"), (0 - new Date().getTimezoneOffset())],
+    queryKey: ["patient-vitals", patientId, period, timePeriod === "daily" ? formatDate(currentPeriod, "yyyy-MM-dd") : undefined, timePeriod === "daily" ? (0 - new Date().getTimezoneOffset()) : undefined],
     queryFn: () => getPatientVitals(
       patientId,
       period,
@@ -159,8 +159,28 @@ const VitalsChart = ({ patientId }: Props) => {
         return out
       })()
     : stepsSrc
-  const hrForMerge = timePeriod === "weekly" ? hrWeeklyPadded : (timePeriod === "monthly" ? hrMonthlyPadded : hr)
-  const spo2ForMerge = timePeriod === "weekly" ? spo2WeeklyPadded : (timePeriod === "monthly" ? spo2MonthlyPadded : spo2)
+  const hrHourlyPadded = timePeriod === "daily"
+    ? (() => {
+        const byHour = new Map<number, { min?: number; avg?: number; max?: number; resting?: number }>()
+        hrSrc.forEach((r: any) => { const d = new Date(r.time as any); if (Number.isNaN(d.getTime())) return; byHour.set(d.getHours(), { min: r.min, avg: r.avg, max: r.max, resting: (r as any).resting }) })
+        const start = new Date(currentPeriod); start.setHours(0,0,0,0)
+        const out: Array<{ time: string; min?: number; avg?: number; max?: number; resting?: number }> = []
+        for (let h = 0; h < 24; h++) { const d = new Date(start); d.setHours(h,0,0,0); const v = byHour.get(h) || {}; out.push({ time: d.toISOString(), min: v.min, avg: v.avg, max: v.max, resting: v.resting }) }
+        return out
+      })()
+    : hr
+  const spo2HourlyPadded = timePeriod === "daily"
+    ? (() => {
+        const byHour = new Map<number, { min?: number; avg?: number; max?: number }>()
+        spo2Src.forEach((r: any) => { const d = new Date(r.time as any); if (Number.isNaN(d.getTime())) return; byHour.set(d.getHours(), { min: r.min, avg: r.avg, max: r.max }) })
+        const start = new Date(currentPeriod); start.setHours(0,0,0,0)
+        const out: Array<{ time: string; min?: number; avg?: number; max?: number }> = []
+        for (let h = 0; h < 24; h++) { const d = new Date(start); d.setHours(h,0,0,0); const v = byHour.get(h) || {}; out.push({ time: d.toISOString(), min: v.min, avg: v.avg, max: v.max }) }
+        return out
+      })()
+    : spo2
+  const hrForMerge = timePeriod === "weekly" ? hrWeeklyPadded : (timePeriod === "monthly" ? hrMonthlyPadded : hrHourlyPadded)
+  const spo2ForMerge = timePeriod === "weekly" ? spo2WeeklyPadded : (timePeriod === "monthly" ? spo2MonthlyPadded : spo2HourlyPadded)
   const merged = (hrForMerge.length || spo2ForMerge.length)
     ? (hrForMerge.length >= spo2ForMerge.length
         ? hrForMerge.map((h, i) => ({
@@ -203,6 +223,30 @@ const VitalsChart = ({ patientId }: Props) => {
     if (differenceInCalendarMonths(now, end) === 1) return "Last month"
     return formatDate(end, "LLLL yyyy")
   }
+
+  useEffect(() => {
+    if (timePeriod !== "daily") return
+    const arr: any[] = merged as any
+    if (!arr.length) return
+    const last = arr[arr.length - 1]
+    const d = new Date(last.date as any)
+    if (Number.isNaN(d.getTime())) return
+    const curKey = `${currentPeriod.getFullYear()}-${String(currentPeriod.getMonth() + 1).padStart(2, "0")}-${String(currentPeriod.getDate()).padStart(2, "0")}`
+    const newKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    if (curKey !== newKey) setCurrentPeriod(new Date(d.getFullYear(), d.getMonth(), d.getDate()))
+  }, [timePeriod, merged])
+
+  const stepsHourlyPadded = timePeriod === "daily"
+    ? (() => {
+        const byHour = new Map<number, number>()
+        stepsSrc.forEach((r: any) => { const d = new Date(r.time as any); if (Number.isNaN(d.getTime())) return; byHour.set(d.getHours(), typeof r.count === "number" ? r.count : undefined as any) })
+        const start = new Date(currentPeriod); start.setHours(0,0,0,0)
+        const out: Array<{ time: string; count?: number }> = []
+        for (let h = 0; h < 24; h++) { const d = new Date(start); d.setHours(h,0,0,0); const v = byHour.get(h); out.push({ time: d.toISOString(), count: v }) }
+        return out
+      })()
+    : stepsSrc
+  const stepsForChart = timePeriod === "weekly" ? stepsWeeklyPadded : (timePeriod === "monthly" ? stepsMonthlyPadded : stepsHourlyPadded)
 
   const handlePrevious = () => {
     if (timePeriod === "daily") setCurrentPeriod(addDays(currentPeriod, -1))
@@ -281,7 +325,7 @@ const VitalsChart = ({ patientId }: Props) => {
       <div className="space-y-8">
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">Loading…</div>
-        ) : merged.length ? (
+        ) : (merged.length || stepsForChart.length) ? (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="heartRate">Heart Rate</TabsTrigger>
@@ -295,7 +339,7 @@ const VitalsChart = ({ patientId }: Props) => {
                 <ComposedChart data={merged}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} tickFormatter={(v) => (timePeriod === "weekly" ? formatDate(new Date(v), "EEE dd") : (timePeriod === "monthly" ? formatDate(new Date(v), "dd") : formatTimeHM(v)))} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} domain={[40, 200]} tick={{ fill: "hsl(var(--muted-foreground))" }} allowDataOverflow />
                   <Tooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)" }}
                     labelStyle={{ color: "hsl(var(--foreground))" }}
@@ -350,7 +394,7 @@ const VitalsChart = ({ patientId }: Props) => {
                 <ComposedChart data={merged}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} tickFormatter={(v) => (timePeriod === "weekly" ? formatDate(new Date(v), "EEE dd") : (timePeriod === "monthly" ? formatDate(new Date(v), "dd") : formatTimeHM(v)))} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} domain={[90, 100]} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "12px" }} domain={[90, 100]} tick={{ fill: "hsl(var(--muted-foreground))" }} allowDataOverflow />
                   <Tooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)" }}
                     labelStyle={{ color: "hsl(var(--foreground))" }}

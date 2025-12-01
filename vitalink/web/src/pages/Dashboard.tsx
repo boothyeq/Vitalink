@@ -54,7 +54,8 @@ const Dashboard = () => {
     }
     syncIfDefault()
   }, [patientId, infoQuery.data])
-  const vitalsQuery = useQuery({ queryKey: ["patient-vitals", patientId, "weekly"], queryFn: () => getPatientVitals(patientId, "weekly"), refetchOnWindowFocus: false, enabled: !!patientId });
+  const vitalsQuery = useQuery({ queryKey: ["patient-vitals", patientId], queryFn: () => getPatientVitals(patientId), refetchOnWindowFocus: false, enabled: !!patientId });
+  const vitalsWeeklyQuery = useQuery({ queryKey: ["patient-vitals", patientId, "weekly"], queryFn: () => getPatientVitals(patientId, "weekly"), refetchOnWindowFocus: false, enabled: !!patientId });
   const summary = data?.summary || {};
   const hr = summary.heartRate ?? "--";
   const bpS = summary.bpSystolic ?? "--";
@@ -68,10 +69,11 @@ const Dashboard = () => {
     const dt = t ? new Date(t) : undefined;
     return dt && !Number.isNaN(dt.getTime()) ? dt : undefined;
   };
-  const lastHr = latestTime(vitals.hr as any);
-  const lastBp = latestTime(vitals.bp as any);
-  const lastWeight = latestTime(vitals.weight as any);
-  const lastSteps = latestTime(vitals.steps as any);
+  const weeklyVitals = vitalsWeeklyQuery.data?.vitals || {};
+  const lastHr = latestTime(vitals.hr as any) || latestTime(weeklyVitals.hr as any);
+  const lastBp = latestTime(vitals.bp as any) || latestTime(weeklyVitals.bp as any);
+  const lastWeight = latestTime(vitals.weight as any) || latestTime(weeklyVitals.weight as any);
+  const lastSteps = latestTime(vitals.steps as any) || latestTime(weeklyVitals.steps as any);
   const lastAny = [lastHr, lastBp, lastWeight, lastSteps].filter(Boolean).sort((a: any, b: any) => (b as Date).getTime() - (a as Date).getTime())[0] as Date | undefined;
   
   return (
