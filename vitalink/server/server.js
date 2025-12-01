@@ -436,52 +436,20 @@ app.get('/patient/vitals', async (req, res) => {
       steps: (steps.data || []).reverse().map((r) => ({ time: r.hour_ts, count: Math.round(r.steps_total || 0) })),
       bp: [],
       weight: [],
-    }
-  }
-  return res.status(200).json({ vitals: out })
-})
-
-app.get('/patient/reminders', async (req, res) => {
-  const pid = (req.query && req.query.patientId)
-  if (!pid) return res.status(400).json({ error: 'missing patientId' })
-  return res.status(200).json({ reminders: [] })
-})
-const getPatientsRoute = require('./routes/admin/getPatients')(supabase);
-const adminLoginRoute = require('./routes/admin/login')(supabase);
-
-app.get('/api/admin/patients', getPatientsRoute);
-app.post('/api/admin/login', adminLoginRoute);
-
-// OLD ROUTE - Disabled because it requires Supabase Auth service role key
-// Use the new admin system with /api/admin/patients instead
-/*
-app.get('/admin/auth-users', async (req, res) => {
-  const r = await supabase.auth.admin.listUsers({ page: 1, perPage: 100 })
-  if (r.error) return res.status(400).json({ error: r.error.message })
-  const users = (r.data && r.data.users) || []
-  const out = users.map((u) => ({ id: u.id, email: u.email, created_at: u.created_at, role: (u.app_metadata && u.app_metadata.role) || null }))
-  return res.status(200).json({ users: out })
-})
-*/
-app.post('/admin/auth-generate-link', async (req, res) => {
-  const email = req.body && req.body.email
-  if (!email) return res.status(400).json({ error: 'missing email' })
-  const redirect = (req.body && req.body.redirect) || undefined
-  const r = await supabase.auth.admin.generateLink({ type: 'magiclink', email, redirectTo: redirect })
-  if (r.error) return res.status(400).json({ error: r.error.message })
-  const data = r.data || {}
-  const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
-  const fragment = actionLink.split('#')[1]
-  const base = redirect || 'http://localhost:5173/auth/callback'
-  const callback_link = fragment ? `${base}#${fragment}` : null
-  let verify_link = null
-  if (!callback_link && actionLink.includes('redirect_to=')) {
-    const u = new URL(actionLink)
-    u.searchParams.set('redirect_to', base)
-    verify_link = u.toString()
-  }
-  return res.status(200).json({ data, callback_link, verify_link })
-})
+      if(r.error) return res.status(400).json({ error: r.error.message })
+const data = r.data || {}
+const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
+const fragment = actionLink.split('#')[1]
+const base = redirect || 'http://localhost:5173/auth/callback'
+const callback_link = fragment ? `${base}#${fragment}` : null
+let verify_link = null
+if (!callback_link && actionLink.includes('redirect_to=')) {
+  const u = new URL(actionLink)
+  u.searchParams.set('redirect_to', base)
+  verify_link = u.toString()
+}
+return res.status(200).json({ data, callback_link, verify_link })
+  })
 app.get('/admin/auth-generate-link', async (req, res) => {
   const email = req.query && req.query.email
   if (!email) return res.status(400).json({ error: 'missing email' })
