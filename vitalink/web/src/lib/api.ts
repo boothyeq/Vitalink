@@ -1,5 +1,4 @@
 const DEFAULT_URL = 'http://localhost:3001'
-const DEFAULT_BP_URL = 'http://localhost:3001'
 
 export function serverUrl() {
   const fromEnv1 = import.meta.env.VITE_SERVER_URL as string | undefined
@@ -7,10 +6,10 @@ export function serverUrl() {
   return (fromEnv1 && fromEnv1.length > 0) ? fromEnv1 : ((fromEnv2 && fromEnv2.length > 0) ? fromEnv2 : DEFAULT_URL)
 }
 
-// Separate URL for BP (Blood Pressure) image processing backend
+// Separate URL for BP image processing backend only
 export function bpServerUrl() {
   const fromEnv = import.meta.env.VITE_BP_SERVER_URL as string | undefined
-  return (fromEnv && fromEnv.length > 0) ? fromEnv : serverUrl() // Fallback to main server if not specified
+  return (fromEnv && fromEnv.length > 0) ? fromEnv : serverUrl()
 }
 
 export async function getAdminSummary() {

@@ -12,18 +12,19 @@ Updated `vitalink/web/src/lib/api.ts` to support **two separate backend servers*
    - Reminders, medications, etc.
 
 2. **BP Processing Server** (`https://vitalink-backend-ghcf.onrender.com`)
-   - BP image OCR processing (`/api/process-image`)
-   - Manual BP entry (`/api/add-manual-event`)
-   - BP health events (`/api/health-events`)
+   - **ALL BP operations:**
+     - BP image OCR processing (`/api/process-image`)
+     - Manual BP entry (`/api/add-manual-event`)
+     - BP health events retrieval (`/api/health-events`)
 
 ### New Functions Added
 - `bpServerUrl()` - Returns the BP backend URL from `VITE_BP_SERVER_URL` env variable
 - Falls back to main server if BP URL not specified
 
 ### Updated BP Functions
-- `processImage()` - Now uses `bpServerUrl()`
-- `addManualEvent()` - Now uses `bpServerUrl()`
-- `getHealthEvents()` - Now uses `bpServerUrl()`
+- `processImage()` - Uses `bpServerUrl()` for OCR processing
+- `addManualEvent()` - Uses `bpServerUrl()` for database inserts
+- `getHealthEvents()` - Uses `bpServerUrl()` for fetching BP readings
 
 ---
 
