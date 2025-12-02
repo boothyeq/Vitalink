@@ -106,6 +106,22 @@ async function ensureDevices(devices, patientId) {
   return { ok: true }
 }
 app.get('/health', (req, res) => res.status(200).send('ok'))
+app.get('/__diagnostics/routes', (req, res) => {
+  function list(stack) {
+    const out = []
+    for (const layer of stack || []) {
+      if (layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods || {}).map((m) => m.toUpperCase())
+        out.push({ path: layer.route.path, methods })
+      } else if (layer.handle && layer.handle.stack) {
+        out.push(...list(layer.handle.stack))
+      }
+    }
+    return out
+  }
+  const routes = app._router && app._router.stack ? list(app._router.stack) : []
+  return res.status(200).json({ routes })
+})
 app.post('/admin/ensure-patient', async (req, res) => {
   const pid = req.body && req.body.patientId
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
