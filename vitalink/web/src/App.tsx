@@ -42,7 +42,6 @@ const App = () => (
             <Route path="/contact" element={<RequireAuth><Contact /></RequireAuth>} />
 
             {/* Admin Routes */}
-            <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/patients" element={<RequireAdmin><PatientList /></RequireAdmin>} />
             <Route path="/admin/patient/:id" element={<RequireAdmin><PatientDetail /></RequireAdmin>} />
