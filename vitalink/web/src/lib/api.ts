@@ -116,13 +116,13 @@ export type PatientProfile = {
 }
 
 export async function getPatients() {
-  const res = await fetch(`${serverUrl()}/api/admin/patients`)
+  const res = await fetch(`${bpServerUrl()}/api/admin/patients`)
   if (!res.ok) throw new Error('Failed to fetch patients')
   return res.json() as Promise<{ patients: PatientProfile[] }>
 }
 
 export async function getPatientProfile(patientId: string) {
-  const res = await fetch(`${serverUrl()}/api/admin/patients?patientId=${encodeURIComponent(patientId)}`)
+  const res = await fetch(`${bpServerUrl()}/api/admin/patients?patientId=${encodeURIComponent(patientId)}`)
   if (!res.ok) throw new Error('Failed to fetch patient profile')
   const data = await res.json()
   return data.patients[0] as PatientProfile | undefined
@@ -171,7 +171,7 @@ export async function savePatientMedications(payload: { patientId: string } & Pa
   return res.json() as Promise<{ ok: boolean }>
 }
 
-export type PatientInfo = { patient?: { patient_id: string; first_name?: string; last_name?: string; dob?: string }, devicesCount?: number, warnings?: string[] }
+export type PatientInfo = { patient?: { patient_id: string; first_name?: string; last_name?: string; dob?: string }, devicesCount?: number, devices?: any[], warnings?: string[] }
 
 export async function getPatientInfo(patientId?: string) {
   const pid = patientId
@@ -216,7 +216,7 @@ export async function postSymptomLog(payload: { patientId: string; timeTs?: stri
 }
 
 export async function sendSymptomMessage(message: string, patientId: string) {
-  const res = await fetch(`${serverUrl()}/api/chat/symptoms`, {
+  const res = await fetch(`${bpServerUrl()}/api/chat/symptoms`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, patientId })
