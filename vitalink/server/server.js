@@ -181,7 +181,7 @@ app.get('/admin/patient-info', async (req, res) => {
   try {
     const patientRes = await supabase
       .from('patients')
-      .select('patient_id, first_name, last_name, date_of_birth')
+      .select('patient_id, first_name, last_name, dob')
       .eq('patient_id', pid)
       .single()
 
@@ -201,7 +201,7 @@ app.get('/admin/patient-info', async (req, res) => {
         patient_id: patientRes.data.patient_id,
         first_name: patientRes.data.first_name,
         last_name: patientRes.data.last_name,
-        dob: patientRes.data.date_of_birth
+        dob: patientRes.data.dob
       },
       devicesCount,
       warnings: []
@@ -219,7 +219,7 @@ app.get('/api/admin/patients', async (req, res) => {
 
     let query = supabase
       .from('patients')
-      .select('patient_id, first_name, last_name, date_of_birth, created_at')
+      .select('patient_id, first_name, last_name, dob, created_at')
 
     if (pid) {
       query = query.eq('patient_id', pid)
@@ -242,7 +242,7 @@ app.get('/api/admin/patients', async (req, res) => {
           email: authRes.data?.user?.email || null,
           created_at: authRes.data?.user?.created_at || patient.created_at,
           last_sign_in_at: authRes.data?.user?.last_sign_in_at || null,
-          date_of_birth: patient.date_of_birth
+          date_of_birth: patient.dob
         }
       } catch (err) {
         console.error(`[GET /api/admin/patients] Error fetching auth user for ${patient.patient_id}:`, err)
@@ -253,7 +253,7 @@ app.get('/api/admin/patients', async (req, res) => {
           email: null,
           created_at: patient.created_at,
           last_sign_in_at: null,
-          date_of_birth: patient.date_of_birth
+          date_of_birth: patient.dob
         }
       }
     }))
@@ -339,7 +339,7 @@ app.post('/api/chat/symptoms', async (req, res) => {
     // Initialize Gemini AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-pro",
       systemInstruction: `You are a helpful medical assistant for Vitalink, a heart failure monitoring application. 
 
 CRITICAL DISCLAIMERS:
