@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { NavLink } from "@/components/NavLink"
-import { Heart, LayoutDashboard, BookOpen, Menu, ClipboardList, CalendarDays, LogOut, Pill } from "lucide-react"
+import { Heart, LayoutDashboard, BookOpen, Menu, ClipboardList, CalendarDays, LogOut, Pill, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { supabase } from "@/lib/supabase"
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/vitals", label: "Vitals", icon: Activity },
   { to: "/self-check", label: "Self Check", icon: ClipboardList },
   { to: "/schedule", label: "Schedule", icon: CalendarDays },
   { to: "/medication", label: "Medication", icon: Pill },
@@ -39,7 +40,7 @@ export default function Navigation() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut({ scope: "local" })
-    } catch (_) {}
+    } catch (_) { }
     navigate("/login")
   }
   return (
@@ -88,7 +89,7 @@ export default function Navigation() {
                       return (
                         <NavLink
                           key={item.to}
-                      to={(item.to === "/schedule" || item.to === "/medication") && pid ? `${item.to}?patientId=${encodeURIComponent(pid)}` : item.to}
+                          to={(item.to === "/schedule" || item.to === "/medication") && pid ? `${item.to}?patientId=${encodeURIComponent(pid)}` : item.to}
                           className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
                           activeClassName="text-primary bg-primary/10 font-medium"
                         >
