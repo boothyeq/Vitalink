@@ -320,6 +320,25 @@ app.post('/api/admin/login', async (req, res) => {
   }
 })
 
+// Debug route to list available Gemini models
+app.get('/api/debug/models', async (req, res) => {
+  try {
+    const key = process.env.GEMINI_API_KEY
+    if (!key) return res.status(500).json({ error: 'No GEMINI_API_KEY set' })
+
+    // Use global fetch (Node 18+)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`)
+    if (!response.ok) {
+      const errText = await response.text()
+      return res.status(response.status).json({ error: 'Failed to list models', details: errText })
+    }
+    const data = await response.json()
+    return res.json(data)
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+})
+
 // AI Symptom Checker Route
 app.post('/api/chat/symptoms', async (req, res) => {
   try {
@@ -339,7 +358,7 @@ app.post('/api/chat/symptoms', async (req, res) => {
     // Initialize Gemini AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+      model: "gemini-1.5-flash",
       systemInstruction: `You are a helpful medical assistant for Vitalink, a heart failure monitoring application. 
 
 CRITICAL DISCLAIMERS:

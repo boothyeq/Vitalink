@@ -112,130 +112,127 @@ How can I help you today?`,
     };
 
     return (
-        <>
-            <Navigation />
-            <main className="mx-auto max-w-5xl px-4 py-6">
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                        <Sparkles className="w-6 h-6 text-primary" />
-                        AI Symptom Checker
-                    </h2>
-                    <p className="text-muted-foreground mt-1">
-                        Get personalized health insights based on your vitals and symptoms
-                    </p>
-                </div>
+        <main className="mx-auto max-w-5xl px-4 py-6">
+            <div className="mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Sparkles className="w-6 h-6 text-primary" />
+                    AI Symptom Checker
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                    Get personalized health insights based on your vitals and symptoms
+                </p>
+            </div>
 
-                <Card className="h-[calc(100vh-240px)] flex flex-col">
-                    <CardHeader className="border-b">
-                        <CardTitle className="flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-primary" />
-                            Chat with AI Assistant
-                        </CardTitle>
-                        <CardDescription>
-                            Ask questions about your symptoms, vitals, or general health
-                        </CardDescription>
-                    </CardHeader>
+            <Card className="h-[calc(100vh-240px)] flex flex-col">
+                <CardHeader className="border-b">
+                    <CardTitle className="flex items-center gap-2">
+                        <Bot className="w-5 h-5 text-primary" />
+                        Chat with AI Assistant
+                    </CardTitle>
+                    <CardDescription>
+                        Ask questions about your symptoms, vitals, or general health
+                    </CardDescription>
+                </CardHeader>
 
-                    <CardContent className="flex-1 flex flex-col p-0">
-                        {/* Messages Area */}
-                        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                            <div className="space-y-4">
-                                {messages.map((message) => (
-                                    <div
-                                        key={message.id}
-                                        className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                    >
-                                        {message.role === 'assistant' && (
-                                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                                <Bot className="w-5 h-5 text-primary" />
-                                            </div>
-                                        )}
-
-                                        <div
-                                            className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user'
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-muted'
-                                                }`}
-                                        >
-                                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                                            <p className="text-xs opacity-70 mt-1">
-                                                {new Date(message.timestamp).toLocaleTimeString()}
-                                            </p>
-                                        </div>
-
-                                        {message.role === 'user' && (
-                                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                                <User className="w-5 h-5 text-primary-foreground" />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-
-                                {loading && (
-                                    <div className="flex gap-3 justify-start">
+                <CardContent className="flex-1 flex flex-col p-0">
+                    {/* Messages Area */}
+                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                        <div className="space-y-4">
+                            {messages.map((message) => (
+                                <div
+                                    key={message.id}
+                                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                >
+                                    {message.role === 'assistant' && (
                                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                                             <Bot className="w-5 h-5 text-primary" />
                                         </div>
-                                        <div className="bg-muted rounded-lg p-3">
-                                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </ScrollArea>
-
-                        {/* Suggested Questions (only show when no messages) */}
-                        {messages.length === 1 && (
-                            <div className="px-4 pb-4 border-t pt-4">
-                                <p className="text-sm text-muted-foreground mb-2">Suggested questions:</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    {suggestedQuestions.map((question, idx) => (
-                                        <Button
-                                            key={idx}
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleSuggestedQuestion(question)}
-                                            className="text-left justify-start h-auto py-2 px-3"
-                                        >
-                                            <span className="text-xs">{question}</span>
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Disclaimer */}
-                        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border-t border-amber-200 dark:border-amber-900">
-                            <div className="flex items-start gap-2">
-                                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
-                                <p className="text-xs text-amber-800 dark:text-amber-200">
-                                    This AI assistant provides general information only. Always consult your healthcare provider for medical advice.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Input Area */}
-                        <div className="p-4 border-t">
-                            <form onSubmit={handleSend} className="flex gap-2">
-                                <Input
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Type your question or describe your symptoms..."
-                                    disabled={loading}
-                                    className="flex-1"
-                                />
-                                <Button type="submit" disabled={loading || !input.trim()} size="icon">
-                                    {loading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Send className="w-4 h-4" />
                                     )}
-                                </Button>
-                            </form>
+
+                                    <div
+                                        className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user'
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-muted'
+                                            }`}
+                                    >
+                                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                        <p className="text-xs opacity-70 mt-1">
+                                            {new Date(message.timestamp).toLocaleTimeString()}
+                                        </p>
+                                    </div>
+
+                                    {message.role === 'user' && (
+                                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                                            <User className="w-5 h-5 text-primary-foreground" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {loading && (
+                                <div className="flex gap-3 justify-start">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                        <Bot className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div className="bg-muted rounded-lg p-3">
+                                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </CardContent>
-                </Card>
-            </main>
-        </>
+                    </ScrollArea>
+
+                    {/* Suggested Questions (only show when no messages) */}
+                    {messages.length === 1 && (
+                        <div className="px-4 pb-4 border-t pt-4">
+                            <p className="text-sm text-muted-foreground mb-2">Suggested questions:</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {suggestedQuestions.map((question, idx) => (
+                                    <Button
+                                        key={idx}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSuggestedQuestion(question)}
+                                        className="text-left justify-start h-auto py-2 px-3"
+                                    >
+                                        <span className="text-xs">{question}</span>
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Disclaimer */}
+                    <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border-t border-amber-200 dark:border-amber-900">
+                        <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-amber-800 dark:text-amber-200">
+                                This AI assistant provides general information only. Always consult your healthcare provider for medical advice.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="p-4 border-t">
+                        <form onSubmit={handleSend} className="flex gap-2">
+                            <Input
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Type your question or describe your symptoms..."
+                                disabled={loading}
+                                className="flex-1"
+                            />
+                            <Button type="submit" disabled={loading || !input.trim()} size="icon">
+                                {loading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Send className="w-4 h-4" />
+                                )}
+                            </Button>
+                        </form>
+                    </div>
+                </CardContent>
+            </Card>
+        </main>
     );
 }
