@@ -225,6 +225,7 @@ app.get('/api/admin/patients', async (req, res) => {
     const { data, error } = await query.limit(1000)
 
     if (error) {
+      console.error('[GET /api/admin/patients] Supabase query error:', error)
       return res.status(400).json({ error: error.message })
     }
 
@@ -241,6 +242,7 @@ app.get('/api/admin/patients', async (req, res) => {
           date_of_birth: patient.date_of_birth
         }
       } catch (err) {
+        console.error(`[GET /api/admin/patients] Error fetching auth user for ${patient.patient_id}:`, err)
         return {
           patient_id: patient.patient_id,
           first_name: patient.first_name || 'User',
@@ -278,6 +280,7 @@ app.post('/api/admin/login', async (req, res) => {
       .single()
 
     if (error || !data) {
+      console.error('[POST /api/admin/login] Login failed/User not found:', error)
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
@@ -522,7 +525,7 @@ async function fetchPatientHealthData(patientId) {
     }
 
   } catch (error) {
-    console.error('Error fetching patient health data:', error)
+    console.error('[Helper fetchPatientHealthData] Error fetching patient health data:', error)
     return {
       summary: 'Unable to fetch patient data',
       hr: 'N/A',
