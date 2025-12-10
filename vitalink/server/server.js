@@ -23,7 +23,10 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABAS
 if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(process.env.SUPABASE_URL, supabaseKey)
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn('[server] SUPABASE_SERVICE_ROLE_KEY missing — using SUPABASE_ANON_KEY (admin routes may fail)')
+    console.warn('⚠️ [server] SUPABASE_SERVICE_ROLE_KEY missing — using SUPABASE_ANON_KEY')
+    console.warn('   Admin routes (like /api/admin/patients) will likely fail with 400/403 errors due to RLS.')
+  } else {
+    console.log('✅ [server] Connected to Supabase with SERVICE_ROLE_KEY (Admin privileges active)')
   }
 } else {
   supabaseMock = true
@@ -540,7 +543,21 @@ async function fetchPatientHealthData(patientId) {
 }
 
 
-// --- Blood Pressure Module Routes ---
+// Health Check
+app.get('/api/health', (req, res) => {
+  const usingServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+  res.json({
+    status: 'ok',
+    service: 'vitalink-server',
+    supabase: {
+      connected: !!supabase,
+      usingServiceKey: usingServiceKey, // This tells us if we have admin privileges
+      mode: usingServiceKey ? 'admin' : 'anon'
+    }
+  })
+})
+
+// --- File Uploads (Images) ---sure Module Routes ---
 
 // multer setup
 const uploadDir = 'uploads';
