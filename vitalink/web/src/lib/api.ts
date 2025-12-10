@@ -214,3 +214,16 @@ export async function postSymptomLog(payload: { patientId: string; timeTs?: stri
   const res = await fetch(`${serverUrl()}/ingest/symptom-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   return res.json()
 }
+
+export async function sendSymptomMessage(message: string, patientId: string) {
+  const res = await fetch(`${serverUrl()}/api/chat/symptoms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, patientId })
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Failed to get response')
+  }
+  return res.json() as Promise<{ response: string; timestamp: string }>
+}

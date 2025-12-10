@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes"
 import Navigation from "./components/Navigation"
 import Dashboard from "./pages/Dashboard"
 import VitalsTracker from "./pages/VitalsTracker"
+import SymptomChecker from "./pages/SymptomChecker"
 import Education from "./pages/Education"
 import SelfCheck from "./pages/SelfCheck"
 import ScheduleReminder from "./pages/ScheduleReminder"
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/vitals" element={<RequireAuth><VitalsTracker /></RequireAuth>} />
+            <Route path="/symptom-checker" element={<RequireAuth><SymptomChecker /></RequireAuth>} />
             <Route path="/education" element={<RequireAuth><Education /></RequireAuth>} />
             <Route path="/self-check" element={<RequireAuth><SelfCheck /></RequireAuth>} />
             <Route path="/schedule" element={<RequireAuth><ScheduleReminder /></RequireAuth>} />
