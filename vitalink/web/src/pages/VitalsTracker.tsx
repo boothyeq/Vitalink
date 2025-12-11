@@ -143,6 +143,13 @@ export default function VitalsTracker() {
     setPendingAction(null);
   };
 
+  // Attach stream to video element when camera mode is active
+  useEffect(() => {
+    if (cameraMode && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraMode]);
+
   const startCameraDirectly = async () => {
     try {
       // Check if the browser supports camera access
@@ -154,14 +161,12 @@ export default function VitalsTracker() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setCameraMode(true);
-        setOcrResult(null);
-        setError(null);
-        setSuccess(null);
-      }
+
+      streamRef.current = stream;
+      setCameraMode(true);
+      setOcrResult(null);
+      setError(null);
+      setSuccess(null);
     } catch (err: any) {
       console.error('Camera error:', err);
       if (err.name === 'NotAllowedError') {
