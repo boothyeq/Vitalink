@@ -7,11 +7,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express()
-
-// Increase limit for image uploads
 app.use(express.json({ limit: '5mb' }))
-
-// CORS Middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
@@ -20,7 +16,6 @@ app.use((req, res, next) => {
   next()
 })
 
-// --- SUPABASE SETUP ---
 let supabase
 let supabaseMock = false
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
@@ -29,14 +24,13 @@ if (process.env.SUPABASE_URL && supabaseKey) {
   supabase = createClient(process.env.SUPABASE_URL, supabaseKey)
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.warn('⚠️ [server] SUPABASE_SERVICE_ROLE_KEY missing — using SUPABASE_ANON_KEY')
-    console.warn('   Admin routes may fail due to RLS.')
+    console.warn('   Admin routes (like /api/admin/patients) will likely fail with 400/403 errors due to RLS.')
   } else {
-    console.log('✅ [server] Connected to Supabase with SERVICE_ROLE_KEY')
+    console.log('✅ [server] Connected to Supabase with SERVICE_ROLE_KEY (Admin privileges active)')
   }
 } else {
   supabaseMock = true
   console.warn('[server] SUPABASE_URL / SUPABASE_KEY missing — using mock supabase (no writes)')
-  // Mock API implementation
   const api = {
     async upsert() { return { data: [], error: null } },
     async select() { return { data: [], error: null } },
@@ -44,17 +38,12 @@ if (process.env.SUPABASE_URL && supabaseKey) {
     eq() { return this },
     limit() { return this },
     order() { return this },
-    gte() { return this },
-    lte() { return this },
     or() { return this },
-    from() { return this },
-    single() { return { data: {}, error: null } },
-    update() { return this }
+    from() { return this }
   }
   supabase = { from() { return api }, auth: { admin: { getUserById: async () => ({ error: 'mock' }) } } }
 }
 
-// --- HELPER FUNCTIONS ---
 async function validatePatientId(patientId) {
   if (!patientId) return { ok: false, error: 'missing patientId' }
   if (supabaseMock) return { ok: true }
@@ -70,13 +59,11 @@ async function validatePatientId(patientId) {
     return { ok: false, error: e && e.message ? e.message : String(e) }
   }
 }
-
 function toHourWithOffset(ts, offsetMin) {
   const d = new Date(Date.parse(ts) + (offsetMin || 0) * 60000)
   d.setUTCMinutes(0, 0, 0)
   return d.toISOString()
 }
-
 function toDateWithOffset(ts, offsetMin) {
   const d = new Date(Date.parse(ts) + (offsetMin || 0) * 60000)
   const y = d.getUTCFullYear()
@@ -84,7 +71,6 @@ function toDateWithOffset(ts, offsetMin) {
   const day = String(d.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-
 async function ensurePatient(patientId, info) {
   if (!patientId) return { ok: false, error: 'missing patientId' }
   const first = (info && info.firstName) ? info.firstName : 'User'
@@ -103,7 +89,6 @@ async function ensurePatient(patientId, info) {
   }
   return { ok: true }
 }
-
 async function ensureOrigins(origins) {
   if (!origins.length) return { ok: true }
   const rows = origins.map((o) => ({ origin_id: o }))
@@ -114,7 +99,6 @@ async function ensureOrigins(origins) {
   }
   return { ok: true }
 }
-
 async function ensureDevices(devices, patientId) {
   if (!devices.length) return { ok: true }
   const rows = devices.map((d) => ({ device_id: d, patient_id: patientId }))
@@ -125,11 +109,23 @@ async function ensureDevices(devices, patientId) {
   }
   return { ok: true }
 }
-
-// --- BASIC ROUTES ---
 app.get('/health', (req, res) => res.status(200).send('ok'))
-
-// --- ADMIN ROUTES ---
+app.get('/__diagnostics/routes', (req, res) => {
+  function list(stack) {
+    const out = []
+    for (const layer of stack || []) {
+      if (layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods || {}).map((m) => m.toUpperCase())
+        out.push({ path: layer.route.path, methods })
+      } else if (layer.handle && layer.handle.stack) {
+        out.push(...list(layer.handle.stack))
+      }
+    }
+    return out
+  }
+  const routes = app._router && app._router.stack ? list(app._router.stack) : []
+  return res.status(200).json({ routes })
+})
 app.post('/admin/ensure-patient', async (req, res) => {
   const pid = req.body && req.body.patientId
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
@@ -158,7 +154,6 @@ app.get('/admin/users', async (req, res) => {
   out.users = (rows.data || []).map((r) => r.patient_id)
   return res.status(200).json(out)
 })
-
 app.get('/admin/summary', async (req, res) => {
   const users = await supabase.from('patients').select('patient_id').limit(1000)
   if (users.error) return res.status(400).json({ error: users.error.message })
@@ -292,9 +287,15 @@ app.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
+    // Simple password check (in production, use bcrypt)
+    // For now, we'll check if password matches the stored hash
+    // You should replace this with proper bcrypt comparison
     if (data.password_hash !== password && data.password_hash !== 'PLACEHOLDER') {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
+
+    // If password is PLACEHOLDER, accept any password (for initial setup)
+    // In production, you should hash the password properly
 
     // Update last login time
     await supabase
@@ -319,48 +320,63 @@ app.post('/api/admin/login', async (req, res) => {
   }
 })
 
-// --- AI / GEMINI ROUTES ---
+// Debug route to list available Gemini models
+app.get('/api/debug/models', async (req, res) => {
+  try {
+    const key = process.env.GEMINI_API_KEY
+    if (!key) return res.status(500).json({ error: 'No GEMINI_API_KEY set' })
 
-// 1. DIAGNOSTIC ROUTE - List all models your key can see
+    // Use global fetch (Node 18+)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`)
+    if (!response.ok) {
+      const errText = await response.text()
+      return res.status(response.status).json({ error: 'Failed to list models', details: errText })
+    }
+    const data = await response.json()
+    return res.json(data)
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+
+// --- DIAGNOSTIC ROUTE ---
 app.get('/api/debug/list-models', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "Missing API Key" });
-
-    // Use raw fetch to ask Google directly what models are available
+    // We use a raw fetch to bypass the SDK and ask Google directly
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     const data = await response.json();
 
-    // This JSON will contain a list of models (e.g., "models/gemini-pro", "models/gemini-1.5-flash")
+    // Log to server console so user can see it in Render logs
+    console.log('[Diagnostic] Available Models:', JSON.stringify(data, null, 2));
+
+    // This will return a list of "name": "models/..."
     res.json(data);
   } catch (error) {
+    console.error('[Diagnostic] Error listing models:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. AI SYMPTOM CHECKER ROUTE
+// AI Symptom Checker Route
 app.post('/api/chat/symptoms', async (req, res) => {
   try {
     const { message, patientId } = req.body
 
-    // Safety Check for API Key
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY is missing in .env");
-      return res.status(500).json({ error: "AI Service Unavailable (Missing Key)" });
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' })
     }
 
-    if (!message) return res.status(400).json({ error: 'Message is required' })
-    if (!patientId) return res.status(400).json({ error: 'Patient ID is required' })
+    if (!patientId) {
+      return res.status(400).json({ error: 'Patient ID is required' })
+    }
 
     // Fetch patient health data from Supabase
     const healthData = await fetchPatientHealthData(patientId)
 
     // Initialize Gemini AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-
-    // --- MODEL SELECTION ---
-    // We are using 'gemini-pro' (1.0) because 'gemini-1.5-flash' is returning 404 errors.
-    // 'gemini-pro' is the stable fallback.
     const model = genAI.getGenerativeModel({
       model: "gemini-pro",
       systemInstruction: `You are a helpful medical assistant for Vitalink, a heart failure monitoring application. 
@@ -426,37 +442,86 @@ async function fetchPatientHealthData(patientId) {
     // Fetch recent vitals
     const [hrData, bpData, spo2Data, weightData, stepsData, symptomsData, medicationsData] = await Promise.all([
       // Heart Rate - last 7 days
-      supabase.from('hr_day').select('date, hr_min, hr_max, hr_avg').eq('patient_id', patientId).gte('date', dateStr).order('date', { ascending: false }).limit(7),
+      supabase
+        .from('hr_day')
+        .select('date, hr_min, hr_max, hr_avg')
+        .eq('patient_id', patientId)
+        .gte('date', dateStr)
+        .order('date', { ascending: false })
+        .limit(7),
+
       // Blood Pressure - last 7 readings
-      supabase.from('bp_readings').select('reading_date, reading_time, systolic, diastolic, pulse').eq('patient_id', patientId).order('reading_date', { ascending: false }).order('reading_time', { ascending: false }).limit(7),
+      supabase
+        .from('bp_readings')
+        .select('reading_date, reading_time, systolic, diastolic, pulse')
+        .eq('patient_id', patientId)
+        .order('reading_date', { ascending: false })
+        .order('reading_time', { ascending: false })
+        .limit(7),
+
       // SpO2 - last 7 days
-      supabase.from('spo2_day').select('date, spo2_min, spo2_max, spo2_avg').eq('patient_id', patientId).gte('date', dateStr).order('date', { ascending: false }).limit(7),
+      supabase
+        .from('spo2_day')
+        .select('date, spo2_min, spo2_max, spo2_avg')
+        .eq('patient_id', patientId)
+        .gte('date', dateStr)
+        .order('date', { ascending: false })
+        .limit(7),
+
       // Weight - last 7 days
-      supabase.from('weight_day').select('date, kg_min, kg_max, kg_avg').eq('patient_id', patientId).gte('date', dateStr).order('date', { ascending: false }).limit(7),
+      supabase
+        .from('weight_day')
+        .select('date, kg_min, kg_max, kg_avg')
+        .eq('patient_id', patientId)
+        .gte('date', dateStr)
+        .order('date', { ascending: false })
+        .limit(7),
+
       // Steps - last 7 days
-      supabase.from('steps_day').select('date, steps_total').eq('patient_id', patientId).gte('date', dateStr).order('date', { ascending: false }).limit(7),
+      supabase
+        .from('steps_day')
+        .select('date, steps_total')
+        .eq('patient_id', patientId)
+        .gte('date', dateStr)
+        .order('date', { ascending: false })
+        .limit(7),
+
       // Symptoms - last 7 days
-      supabase.from('symptom_log').select('date, cough, sob_activity, leg_swelling, sudden_weight_gain, abd_discomfort, orthopnea, notes').eq('patient_id', patientId).gte('date', dateStr).order('date', { ascending: false }).limit(7),
+      supabase
+        .from('symptom_log')
+        .select('date, cough, sob_activity, leg_swelling, sudden_weight_gain, abd_discomfort, orthopnea, notes')
+        .eq('patient_id', patientId)
+        .gte('date', dateStr)
+        .order('date', { ascending: false })
+        .limit(7),
+
       // Current medications
-      supabase.from('medication').select('name, class, dosage, instructions').eq('patient_id', patientId).eq('active', true)
+      supabase
+        .from('medication')
+        .select('name, class, dosage, instructions')
+        .eq('patient_id', patientId)
+        .eq('active', true)
     ])
 
-    // Format the data helpers
+    // Format the data
     const formatHR = (data) => {
       if (!data || data.length === 0) return 'No recent data'
       const latest = data[0]
       return `Latest: ${latest.hr_avg} bpm (range: ${latest.hr_min}-${latest.hr_max}), Trend: ${data.length} days recorded`
     }
+
     const formatBP = (data) => {
       if (!data || data.length === 0) return 'No recent data'
       const latest = data[0]
       return `Latest: ${latest.systolic}/${latest.diastolic} mmHg, Pulse: ${latest.pulse} bpm, ${data.length} readings in past week`
     }
+
     const formatSpO2 = (data) => {
       if (!data || data.length === 0) return 'No recent data'
       const latest = data[0]
       return `Latest: ${latest.spo2_avg}% (range: ${latest.spo2_min}-${latest.spo2_max}%), ${data.length} days recorded`
     }
+
     const formatWeight = (data) => {
       if (!data || data.length === 0) return 'No recent data'
       const latest = data[0]
@@ -464,11 +529,13 @@ async function fetchPatientHealthData(patientId) {
       const change = latest.kg_avg - oldest.kg_avg
       return `Latest: ${latest.kg_avg} kg, Change over week: ${change > 0 ? '+' : ''}${change.toFixed(1)} kg`
     }
+
     const formatSteps = (data) => {
       if (!data || data.length === 0) return 'No recent data'
       const avg = data.reduce((sum, d) => sum + d.steps_total, 0) / data.length
       return `Average: ${Math.round(avg)} steps/day over ${data.length} days`
     }
+
     const formatSymptoms = (data) => {
       if (!data || data.length === 0) return 'No symptoms logged recently'
       const latest = data[0]
@@ -482,6 +549,7 @@ async function fetchPatientHealthData(patientId) {
       if (latest.notes) symptoms.push(`Notes: ${latest.notes}`)
       return symptoms.length > 0 ? symptoms.join(', ') : 'No significant symptoms'
     }
+
     const formatMedications = (data) => {
       if (!data || data.length === 0) return 'No active medications'
       return data.map(m => `${m.name} (${m.class}) - ${m.dosage || 'As prescribed'}`).join('; ')
@@ -502,12 +570,35 @@ async function fetchPatientHealthData(patientId) {
     console.error('[Helper fetchPatientHealthData] Error fetching patient health data:', error)
     return {
       summary: 'Unable to fetch patient data',
-      hr: 'N/A', bp: 'N/A', spo2: 'N/A', weight: 'N/A', steps: 'N/A', symptoms: 'N/A', medications: 'N/A'
+      hr: 'N/A',
+      bp: 'N/A',
+      spo2: 'N/A',
+      weight: 'N/A',
+      steps: 'N/A',
+      symptoms: 'N/A',
+      medications: 'N/A'
     }
   }
 }
 
-// --- FILE UPLOADS & BP MODULE ---
+
+// Health Check
+app.get('/api/health', (req, res) => {
+  const usingServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+  res.json({
+    status: 'ok',
+    service: 'vitalink-server',
+    supabase: {
+      connected: !!supabase,
+      usingServiceKey: usingServiceKey, // This tells us if we have admin privileges
+      mode: usingServiceKey ? 'admin' : 'anon'
+    }
+  })
+})
+
+// --- File Uploads (Images) ---sure Module Routes ---
+
+// multer setup
 const uploadDir = 'uploads';
 if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir); }
 const storage = multer.diskStorage({
@@ -526,16 +617,15 @@ try {
   console.log('[server] BP routes loaded successfully');
 } catch (err) {
   console.error('[server] Error loading BP routes:', err);
-  // We don't exit process here so other routes keep working
+  process.exit(1);
 }
 
-// Register BP routes (only if loaded)
-if (processImageRoute) app.post('/api/process-image', processImageRoute);
-if (addManualEventRoute) app.post('/api/add-manual-event', addManualEventRoute);
-if (getHealthEventsRoute) app.get('/api/health-events', getHealthEventsRoute);
+// Register BP routes
+app.post('/api/process-image', processImageRoute);
+app.post('/api/add-manual-event', addManualEventRoute);
+app.get('/api/health-events', getHealthEventsRoute);
 
-
-// --- DASHBOARD ENDPOINTS ---
+// Patient endpoints for dashboard
 app.get('/patient/summary', async (req, res) => {
   const pid = (req.query && req.query.patientId)
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
@@ -562,17 +652,100 @@ app.get('/patient/vitals', async (req, res) => {
   if (!pid) return res.status(400).json({ error: 'missing patientId' })
   let out = { hr: [], spo2: [], steps: [], bp: [], weight: [] }
   if (period === 'weekly') {
-    const hr = await supabase.from('hr_day').select('date,hr_min,hr_max,hr_avg').eq('patient_id', pid).order('date', { ascending: false }).limit(7)
-    const spo2 = await supabase.from('spo2_day').select('date,spo2_min,spo2_max,spo2_avg').eq('patient_id', pid).order('date', { ascending: false }).limit(7)
-    const steps = await supabase.from('steps_day').select('date,steps_total').eq('patient_id', pid).order('date', { ascending: false }).limit(7)
-    const bp = await supabase.from('bp_readings').select('reading_date,reading_time,systolic,diastolic,pulse').eq('patient_id', pid).order('reading_date', { ascending: false }).order('reading_time', { ascending: false }).limit(50)
+    const hr = await supabase
+      .from('hr_day')
+      .select('date,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_day')
+      .select('date,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_day')
+      .select('date,steps_total')
+      .eq('patient_id', pid)
+      .order('date', { ascending: false })
+      .limit(7)
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
+
+    // Fetch BP readings for the week
+    const bp = await supabase
+      .from('bp_readings')
+      .select('reading_date,reading_time,systolic,diastolic,pulse')
+      .eq('patient_id', pid)
+      .order('reading_date', { ascending: false })
+      .order('reading_time', { ascending: false })
+      .limit(50)
+    if (bp.error) return res.status(400).json({ error: bp.error.message })
 
     const hrDays = (hr.data || []).reverse()
+    const dayKeys = hrDays.map((r) => r.date)
+    const startKey = dayKeys[0]
+    const endKey = dayKeys[dayKeys.length - 1]
+    let restingMap = new Map()
+    if (startKey && endKey) {
+      const startTs = `${startKey}T00:00:00.000Z`
+      const endTs = `${endKey}T23:59:59.999Z`
+      const hrs = await supabase
+        .from('hr_hour')
+        .select('hour_ts,hr_avg,hr_count')
+        .eq('patient_id', pid)
+        .gte('hour_ts', startTs)
+        .lte('hour_ts', endTs)
+        .order('hour_ts', { ascending: true })
+      if (!hrs.error) {
+        const byDay = new Map()
+        for (const row of (hrs.data || [])) {
+          const d = new Date(row.hour_ts)
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          const key = `${y}-${m}-${day}`
+          const h = d.getUTCHours()
+          const arr = byDay.get(key) || []
+          arr.push({ h, avg: row.hr_avg, count: row.hr_count })
+          byDay.set(key, arr)
+        }
+        for (const [dk, arr] of byDay) {
+          const night = arr.filter(x => x.h >= 0 && x.h <= 6 && (x.count || 0) >= 10).sort((a, b) => a.h - b.h)
+          let val
+          if (night.length >= 1) {
+            let best = { score: Infinity, vals: [] }
+            for (let i = 0; i < night.length; i++) {
+              const w = [night[i], night[i + 1], night[i + 2]].filter(Boolean)
+              if (w.length) {
+                const score = w.reduce((s, x) => s + (x.avg || 0), 0) / w.length
+                const vals = w.map(x => x.avg || 0).sort((a, b) => a - b)
+                const mid = Math.floor(vals.length / 2)
+                const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2
+                if (score < best.score) best = { score, vals: [median] }
+              }
+            }
+            val = best.vals[0]
+          } else {
+            const dayAgg = hrDays.find(r => r.date === dk)
+            val = dayAgg ? dayAgg.hr_min || null : null
+          }
+          if (val != null) restingMap.set(dk, Math.round(val))
+        }
+      }
+    }
     out = {
-      hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0) })),
+      hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
       spo2: (spo2.data || []).reverse().map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
       steps: (steps.data || []).reverse().map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
-      bp: (bp.data || []).reverse().map((r) => ({ time: `${r.reading_date}T${r.reading_time}`, systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse })),
+      bp: (bp.data || []).reverse().map((r) => ({
+        time: `${r.reading_date}T${r.reading_time}`,
+        systolic: r.systolic,
+        diastolic: r.diastolic,
+        pulse: r.pulse
+      })),
       weight: [],
     }
   } else if (period === 'monthly') {
@@ -581,81 +754,496 @@ app.get('/patient/vitals', async (req, res) => {
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     const startStr = start.toISOString().slice(0, 10)
     const endStr = end.toISOString().slice(0, 10)
-    const hr = await supabase.from('hr_day').select('date,hr_min,hr_max,hr_avg').eq('patient_id', pid).gte('date', startStr).lte('date', endStr).order('date', { ascending: true })
-    const spo2 = await supabase.from('spo2_day').select('date,spo2_min,spo2_max,spo2_avg').eq('patient_id', pid).gte('date', startStr).lte('date', endStr).order('date', { ascending: true })
-    const steps = await supabase.from('steps_day').select('date,steps_total').eq('patient_id', pid).gte('date', startStr).lte('date', endStr).order('date', { ascending: true })
-    const bp = await supabase.from('bp_readings').select('reading_date,reading_time,systolic,diastolic,pulse').eq('patient_id', pid).gte('reading_date', startStr).lte('reading_date', endStr).order('reading_date', { ascending: true })
+    const hr = await supabase
+      .from('hr_day')
+      .select('date,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_day')
+      .select('date,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_day')
+      .select('date,steps_total')
+      .eq('patient_id', pid)
+      .gte('date', startStr)
+      .lte('date', endStr)
+      .order('date', { ascending: true })
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
+
+    // Fetch BP readings for the month
+    const bp = await supabase
+      .from('bp_readings')
+      .select('reading_date,reading_time,systolic,diastolic,pulse')
+      .eq('patient_id', pid)
+      .gte('reading_date', startStr)
+      .lte('reading_date', endStr)
+      .order('reading_date', { ascending: true })
+      .order('reading_time', { ascending: true })
+    if (bp.error) return res.status(400).json({ error: bp.error.message })
+
+    const hrDays = (hr.data || [])
+    let restingMap = new Map()
+    if (startStr && endStr) {
+      const startTs = `${startStr}T00:00:00.000Z`
+      const endTs = `${endStr}T23:59:59.999Z`
+      const hrs = await supabase
+        .from('hr_hour')
+        .select('hour_ts,hr_avg,hr_count')
+        .eq('patient_id', pid)
+        .gte('hour_ts', startTs)
+        .lte('hour_ts', endTs)
+        .order('hour_ts', { ascending: true })
+      if (!hrs.error) {
+        const byDay = new Map()
+        for (const row of (hrs.data || [])) {
+          const d = new Date(row.hour_ts)
+          const y = d.getUTCFullYear()
+          const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const day = String(d.getUTCDate()).padStart(2, '0')
+          const key = `${y}-${m}-${day}`
+          const h = d.getUTCHours()
+          const arr = byDay.get(key) || []
+          arr.push({ h, avg: row.hr_avg, count: row.hr_count })
+          byDay.set(key, arr)
+        }
+        for (const [dk, arr] of byDay) {
+          const night = arr.filter(x => x.h >= 0 && x.h <= 6 && (x.count || 0) >= 10).sort((a, b) => a.h - b.h)
+          let val
+          if (night.length >= 1) {
+            let best = { score: Infinity, vals: [] }
+            for (let i = 0; i < night.length; i++) {
+              const w = [night[i], night[i + 1], night[i + 2]].filter(Boolean)
+              if (w.length) {
+                const score = w.reduce((s, x) => s + (x.avg || 0), 0) / w.length
+                const vals = w.map(x => x.avg || 0).sort((a, b) => a - b)
+                const mid = Math.floor(vals.length / 2)
+                const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2
+                if (score < best.score) best = { score, vals: [median] }
+              }
+            }
+            val = best.vals[0]
+          } else {
+            const dayAgg = hrDays.find(r => r.date === dk)
+            val = dayAgg ? dayAgg.hr_min || null : null
+          }
+          if (val != null) restingMap.set(dk, Math.round(val))
+        }
+      }
+    }
     out = {
-      hr: (hr.data || []).map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0) })),
+      hr: hrDays.map((r) => ({ time: r.date, min: Math.round(r.hr_min || 0), avg: Math.round(r.hr_avg || 0), max: Math.round(r.hr_max || 0), resting: restingMap.get(r.date) })),
       spo2: (spo2.data || []).map((r) => ({ time: r.date, min: Math.round(r.spo2_min || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round(r.spo2_max || 0) })),
       steps: (steps.data || []).map((r) => ({ time: r.date, count: Math.round(r.steps_total || 0) })),
-      bp: (bp.data || []).map((r) => ({ time: `${r.reading_date}T${r.reading_time}`, systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse })),
+      bp: (bp.data || []).map((r) => ({
+        time: `${r.reading_date}T${r.reading_time}`,
+        systolic: r.systolic,
+        diastolic: r.diastolic,
+        pulse: r.pulse
+      })),
       weight: [],
     }
   } else {
-    // HOURLY VIEW
-    const hr = await supabase.from('hr_hour').select('hour_ts,hr_min,hr_max,hr_avg').eq('patient_id', pid).order('hour_ts', { ascending: false }).limit(24)
-    const spo2 = await supabase.from('spo2_hour').select('hour_ts,spo2_min,spo2_max,spo2_avg').eq('patient_id', pid).order('hour_ts', { ascending: false }).limit(24)
-    const steps = await supabase.from('steps_hour').select('hour_ts,steps_total').eq('patient_id', pid).order('hour_ts', { ascending: false }).limit(24)
+    const hr = await supabase
+      .from('hr_hour')
+      .select('hour_ts,hr_min,hr_max,hr_avg')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (hr.error) return res.status(400).json({ error: hr.error.message })
+    const spo2 = await supabase
+      .from('spo2_hour')
+      .select('hour_ts,spo2_min,spo2_max,spo2_avg')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (spo2.error) return res.status(400).json({ error: spo2.error.message })
+    const steps = await supabase
+      .from('steps_hour')
+      .select('hour_ts,steps_total')
+      .eq('patient_id', pid)
+      .order('hour_ts', { ascending: false })
+      .limit(24)
+    if (steps.error) return res.status(400).json({ error: steps.error.message })
     out = {
-      hr: (hr.data || []).reverse().map((r) => ({ time: r.hour_ts, min: Math.round((r.hr_min ?? r.hr_avg) || 0), avg: Math.round(r.hr_avg || 0), max: Math.round((r.hr_max ?? r.hr_avg) || 0) })),
+      hr: (hr.data || []).reverse().map((r) => ({ time: r.hour_ts, min: Math.round((r.hr_min ?? r.hr_avg) || 0), avg: Math.round(r.hr_avg || 0), max: Math.round((r.hr_max ?? r.hr_avg) || 0), count: r.hr_count })),
       spo2: (spo2.data || []).reverse().map((r) => ({ time: r.hour_ts, min: Math.round((r.spo2_min ?? r.spo2_avg) || 0), avg: Math.round(r.spo2_avg || 0), max: Math.round((r.spo2_max ?? r.spo2_avg) || 0) })),
       steps: (steps.data || []).reverse().map((r) => ({ time: r.hour_ts, count: Math.round(r.steps_total || 0) })),
       bp: [],
       weight: [],
     }
   }
-  return res.status(200).json({ vitals: out })
+  return res.status(200).json(out)
+})
+app.get('/admin/auth-generate-link', async (req, res) => {
+  const email = req.query && req.query.email
+  if (!email) return res.status(400).json({ error: 'missing email' })
+  const type = (req.query && req.query.type) || 'magiclink'
+  const redirect = (req.query && req.query.redirect) || undefined
+  const r = await supabase.auth.admin.generateLink({ type, email, redirectTo: redirect })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const data = r.data || {}
+  if (!data.action_link && type === 'magiclink') {
+    const r2 = await supabase.auth.admin.generateLink({ type: 'recovery', email, redirectTo: redirect })
+    const d2 = r2.data || {}
+    const frag2 = (d2.action_link || '').split('#')[1]
+    const base2 = redirect || 'http://localhost:5173/auth/callback'
+    const callback_link2 = frag2 ? `${base2}#${frag2}` : null
+    return res.status(200).json({ data: d2, callback_link: callback_link2 })
+  }
+  const actionLink = (data.action_link || (data.properties && data.properties.action_link) || '')
+  const fragment = actionLink.split('#')[1]
+  const base = redirect || 'http://localhost:5173/auth/callback'
+  const callback_link = fragment ? `${base}#${fragment}` : null
+  let verify_link = null
+  if (!callback_link && actionLink.includes('redirect_to=')) {
+    const u = new URL(actionLink)
+    u.searchParams.set('redirect_to', base)
+    verify_link = u.toString()
+  }
+  return res.status(200).json({ data, callback_link, verify_link })
+})
+app.post('/admin/create-user', async (req, res) => {
+  const email = req.body && req.body.email
+  const password = req.body && req.body.password
+  const role = (req.body && req.body.role) || 'patient'
+  if (!email || !password) return res.status(400).json({ error: 'missing email or password' })
+  const r = await supabase.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { role } })
+  if (r.error) return res.status(400).json({ error: r.error.message })
+  const user = r.data && r.data.user
+  if (role === 'patient' && user && user.id) {
+    await ensurePatient(user.id)
+  }
+  return res.status(200).json({ user: { id: user.id, email: user.email }, role })
+})
+app.post('/admin/promote', async (req, res) => {
+  const email = req.body && req.body.email
+  const role = (req.body && req.body.role) || 'admin'
+  if (!email) return res.status(400).json({ error: 'missing email' })
+  const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+  if (list.error) return res.status(400).json({ error: list.error.message })
+  const users = (list.data && list.data.users) || []
+  const u = users.find((x) => x.email === email)
+  if (!u) return res.status(404).json({ error: 'user not found' })
+  const upd = await supabase.auth.admin.updateUserById(u.id, { app_metadata: { role } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: u.id, email: u.email, role })
 })
 
-// --- INGEST ENDPOINTS (For ESP32/Mobile) ---
+async function deletePatientCascade(pid) {
+  const out = {}
+  const tables = [
+    'steps_event', 'steps_hour', 'steps_day',
+    'hr_sample', 'hr_hour', 'hr_day',
+    'spo2_sample', 'spo2_hour', 'spo2_day',
+    'devices'
+  ]
+  for (const t of tables) {
+    const del = await supabase.from(t).delete().eq('patient_id', pid)
+    out[t] = { count: (del.data || []).length, error: del.error ? del.error.message : null }
+  }
+  const delp = await supabase.from('patients').delete().eq('patient_id', pid)
+  out.patients_delete = { count: (delp.data || []).length, error: delp.error ? delp.error.message : null }
+  return out
+}
+
+app.post('/admin/delete-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  const cascade = !!(req.body && req.body.cascade)
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  if (!uid && email) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+  }
+  const del = await supabase.auth.admin.deleteUser(uid)
+  if (del.error) return res.status(400).json({ error: del.error.message })
+  let cascade_result = null
+  if (cascade) {
+    cascade_result = await deletePatientCascade(uid)
+  }
+  return res.status(200).json({ ok: true, id: uid, cascade: cascade_result })
+})
+
+app.post('/admin/ban-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  const duration = (req.body && req.body.duration) || 'forever'
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  if (!uid && email) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+  }
+  const upd = await supabase.auth.admin.updateUserById(uid, { ban_duration: duration, app_metadata: { deleted: true } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: uid, ban_duration: duration })
+})
+
+app.post('/admin/anonymize-user', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  if (!id && !email) return res.status(400).json({ error: 'missing id or email' })
+  let uid = id
+  let currentEmail = email
+  if (!uid || !currentEmail) {
+    const list = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
+    if (list.error) return res.status(400).json({ error: list.error.message })
+    const users = (list.data && list.data.users) || []
+    const u = uid ? users.find((x) => x.id === uid) : users.find((x) => x.email === email)
+    if (!u) return res.status(404).json({ error: 'user not found' })
+    uid = u.id
+    currentEmail = u.email
+  }
+  const ts = Date.now()
+  const anonym = `deleted+${uid}+${ts}@example.invalid`
+  const upd = await supabase.auth.admin.updateUserById(uid, { email: anonym, app_metadata: { deleted: true, role: null } })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id: uid, old_email: currentEmail, new_email: anonym })
+})
+
+app.post('/admin/delete-patient', async (req, res) => {
+  const pid = req.body && req.body.patientId
+  if (!pid) return res.status(400).json({ error: 'missing patientId' })
+  const result = await deletePatientCascade(pid)
+  return res.status(200).json({ ok: true, patientId: pid, result })
+})
+
+app.post('/admin/update-email', async (req, res) => {
+  const id = req.body && req.body.id
+  const email = req.body && req.body.email
+  if (!id || !email) return res.status(400).json({ error: 'missing id or email' })
+  const upd = await supabase.auth.admin.updateUserById(id, { email, email_confirm: true })
+  if (upd.error) return res.status(400).json({ error: upd.error.message })
+  return res.status(200).json({ ok: true, id, email })
+})
 app.post('/ingest/steps-events', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  if (!items.length) return res.status(200).json({ inserted: 0 })
-  const pid = items[0].patientId
-  await ensurePatient(pid, {})
-  const raw = items.map((i) => ({ patient_id: i.patientId, origin_id: i.originId, device_id: i.deviceId, start_ts: i.startTs, end_ts: i.endTs, count: i.count, record_uid: i.recordUid }))
-  const ins = await supabase.from('steps_event').upsert(raw, { onConflict: 'record_uid' })
-  if (ins.error) return res.status(400).json({ error: ins.error.message })
-
-  // Aggregate
-  const byHour = new Map(), byDay = new Map()
-  for (const i of items) {
-    const h = toHourWithOffset(i.endTs, i.tzOffsetMin), d = toDateWithOffset(i.endTs, i.tzOffsetMin)
-    byHour.set(h, (byHour.get(h) || 0) + i.count)
-    byDay.set(d, (byDay.get(d) || 0) + i.count)
+  // console.log('POST /ingest/steps-events', { count: items.length })
+  if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
+  const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
+  const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
+  if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
+  const eo = await ensureOrigins(origins)
+  if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
+  const ed = await ensureDevices(devices, patientId)
+  if (!ed.ok) return res.status(400).json({ error: `device upsert failed: ${ed.error}` })
+  const raw = items.map((i) => ({
+    patient_id: i.patientId,
+    origin_id: i.originId,
+    device_id: i.deviceId,
+    start_ts: i.startTs,
+    end_ts: i.endTs,
+    count: i.count,
+    record_uid: i.recordUid,
+  }))
+  const ins = await supabase.from('steps_event').upsert(raw, { onConflict: 'record_uid', ignoreDuplicates: true })
+  if (ins.error) {
+    console.error('steps_event upsert error', ins.error)
+    return res.status(400).json({ error: ins.error.message })
   }
-  const hourRows = Array.from(byHour).map(([h, v]) => ({ patient_id: pid, hour_ts: h, steps_total: v }))
-  const dayRows = Array.from(byDay).map(([d, v]) => ({ patient_id: pid, date: d, steps_total: v }))
-  await supabase.from('steps_hour').upsert(hourRows, { onConflict: 'patient_id,hour_ts' })
-  await supabase.from('steps_day').upsert(dayRows, { onConflict: 'patient_id,date' })
-  return res.status(200).json({ inserted: items.length })
+  const byHour = new Map()
+  const byDay = new Map()
+  for (const i of items) {
+    const offset = i.tzOffsetMin || 0
+    const h = toHourWithOffset(i.endTs, offset)
+    const d = toDateWithOffset(i.endTs, offset)
+    const hk = `${i.patientId}|${h}`
+    const dk = `${i.patientId}|${d}`
+    byHour.set(hk, (byHour.get(hk) || 0) + (i.count || 0))
+    byDay.set(dk, (byDay.get(dk) || 0) + (i.count || 0))
+  }
+  const hourRows = []
+  for (const [k, v] of byHour) {
+    const [pid, h] = k.split('|')
+    hourRows.push({ patient_id: pid, hour_ts: h, steps_total: v })
+  }
+  const dayRows = []
+  for (const [k, v] of byDay) {
+    const [pid, d] = k.split('|')
+    dayRows.push({ patient_id: pid, date: d, steps_total: v })
+  }
+  const uph = await supabase.from('steps_hour').upsert(hourRows, { onConflict: 'patient_id,hour_ts' })
+  if (uph.error) {
+    console.error('steps_hour upsert error', uph.error)
+    return res.status(400).json({ error: uph.error.message })
+  }
+  const upd = await supabase.from('steps_day').upsert(dayRows, { onConflict: 'patient_id,date' })
+  if (upd.error) {
+    console.error('steps_day upsert error', upd.error)
+    return res.status(400).json({ error: upd.error.message })
+  }
+  return res.status(200).json({ inserted: (ins.data || []).length, upserted_hour: hourRows.length, upserted_day: dayRows.length })
 })
-
 app.post('/ingest/hr-samples', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  if (!items.length) return res.status(200).json({ inserted: 0 })
-  const pid = items[0].patientId
-  await ensurePatient(pid, {})
-  const raw = items.map((i) => ({ patient_id: i.patientId, origin_id: i.originId, device_id: i.deviceId, time_ts: i.timeTs, bpm: i.bpm, record_uid: i.recordUid }))
-  const ins = await supabase.from('hr_sample').upsert(raw, { onConflict: 'record_uid' })
-  if (ins.error) return res.status(400).json({ error: ins.error.message })
-  // Aggregations (simplified for brevity) would go here similar to steps
-  return res.status(200).json({ inserted: items.length })
+  // console.log('POST /ingest/hr-samples', { count: items.length })
+  if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
+  const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
+  const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
+  if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
+  const eo = await ensureOrigins(origins)
+  if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
+  const ed = await ensureDevices(devices, patientId)
+  if (!ed.ok) return res.status(400).json({ error: `device upsert failed: ${ed.error}` })
+  const raw = items.map((i) => ({
+    patient_id: i.patientId,
+    origin_id: i.originId,
+    device_id: i.deviceId,
+    time_ts: i.timeTs,
+    bpm: i.bpm,
+    record_uid: i.recordUid,
+  }))
+  const ins = await supabase.from('hr_sample').upsert(raw, { onConflict: 'record_uid', ignoreDuplicates: true })
+  if (ins.error) {
+    console.error('hr_sample upsert error', ins.error)
+    return res.status(400).json({ error: ins.error.message })
+  }
+  const hourAgg = new Map()
+  const dayAgg = new Map()
+  for (const i of items) {
+    const offset = i.tzOffsetMin || 0
+    const h = toHourWithOffset(i.timeTs, offset)
+    const d = toDateWithOffset(i.timeTs, offset)
+    const hk = `${i.patientId}|${h}`
+    const dk = `${i.patientId}|${d}`
+    const ha = hourAgg.get(hk) || { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY, sum: 0, count: 0 }
+    ha.min = Math.min(ha.min, i.bpm)
+    ha.max = Math.max(ha.max, i.bpm)
+    ha.sum += i.bpm
+    ha.count += 1
+    hourAgg.set(hk, ha)
+    const da = dayAgg.get(dk) || { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY, sum: 0, count: 0 }
+    da.min = Math.min(da.min, i.bpm)
+    da.max = Math.max(da.max, i.bpm)
+    da.sum += i.bpm
+    da.count += 1
+    dayAgg.set(dk, da)
+  }
+  const hourRows = []
+  for (const [k, a] of hourAgg) {
+    const [pid, h] = k.split('|')
+    const avg = a.count ? a.sum / a.count : 0
+    hourRows.push({ patient_id: pid, hour_ts: h, hr_min: Math.round(a.min), hr_max: Math.round(a.max), hr_avg: avg, hr_count: a.count })
+  }
+  const dayRows = []
+  for (const [k, a] of dayAgg) {
+    const [pid, d] = k.split('|')
+    const avg = a.count ? a.sum / a.count : 0
+    dayRows.push({ patient_id: pid, date: d, hr_min: Math.round(a.min), hr_max: Math.round(a.max), hr_avg: avg, hr_count: a.count })
+  }
+  const uph = await supabase.from('hr_hour').upsert(hourRows, { onConflict: 'patient_id,hour_ts' })
+  if (uph.error) {
+    console.error('hr_hour upsert error', uph.error)
+    return res.status(400).json({ error: uph.error.message })
+  }
+  const upd = await supabase.from('hr_day').upsert(dayRows, { onConflict: 'patient_id,date' })
+  if (upd.error) {
+    console.error('hr_day upsert error', upd.error)
+    return res.status(400).json({ error: upd.error.message })
+  }
+  return res.status(200).json({ inserted: (ins.data || []).length, upserted_hour: hourRows.length, upserted_day: dayRows.length })
 })
-
 app.post('/ingest/spo2-samples', async (req, res) => {
   const items = Array.isArray(req.body) ? req.body : [req.body]
-  if (!items.length) return res.status(200).json({ inserted: 0 })
-  const pid = items[0].patientId
-  await ensurePatient(pid, {})
-  const raw = items.map((i) => ({ patient_id: i.patientId, origin_id: i.originId, device_id: i.deviceId, time_ts: i.timeTs, spo2_pct: i.spo2Pct, record_uid: i.recordUid }))
-  const ins = await supabase.from('spo2_sample').upsert(raw, { onConflict: 'record_uid' })
-  if (ins.error) return res.status(400).json({ error: ins.error.message })
-  // Aggregations would go here
-  return res.status(200).json({ inserted: items.length })
+  // console.log('POST /ingest/spo2-samples', { count: items.length })
+  if (!items.length) return res.status(200).json({ inserted: 0, upserted_hour: 0, upserted_day: 0 })
+  const patientId = items[0].patientId
+  const vp = await validatePatientId(patientId)
+  if (!vp.ok) return res.status(400).json({ error: `invalid patient: ${vp.error}` })
+  const origins = [...new Set(items.map((i) => i.originId).filter(Boolean))]
+  const devices = [...new Set(items.map((i) => i.deviceId).filter(Boolean))]
+  const info = { firstName: items[0] && items[0].firstName, lastName: items[0] && items[0].lastName, dateOfBirth: items[0] && items[0].dateOfBirth }
+  const ep = await ensurePatient(patientId, info)
+  if (!ep.ok) return res.status(400).json({ error: `patient upsert failed: ${ep.error}` })
+  const eo = await ensureOrigins(origins)
+  if (!eo.ok) return res.status(400).json({ error: `origin upsert failed: ${eo.error}` })
+  const ed = await ensureDevices(devices, patientId)
+  if (!ed.ok) return res.status(400).json({ error: `device upsert failed: ${ed.error}` })
+  const raw = items.map((i) => ({
+    patient_id: i.patientId,
+    origin_id: i.originId,
+    device_id: i.deviceId,
+    time_ts: i.timeTs,
+    spo2_pct: i.spo2Pct,
+    record_uid: i.recordUid,
+  }))
+  const ins = await supabase.from('spo2_sample').upsert(raw, { onConflict: 'record_uid', ignoreDuplicates: true })
+  if (ins.error) {
+    console.error('spo2_sample upsert error', ins.error)
+    return res.status(400).json({ error: ins.error.message })
+  }
+  const hourAgg = new Map()
+  const dayAgg = new Map()
+  for (const i of items) {
+    const offset = i.tzOffsetMin || 0
+    const h = toHourWithOffset(i.timeTs, offset)
+    const d = toDateWithOffset(i.timeTs, offset)
+    const hk = `${i.patientId}|${h}`
+    const dk = `${i.patientId}|${d}`
+    const ha = hourAgg.get(hk) || { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY, sum: 0, count: 0 }
+    ha.min = Math.min(ha.min, i.spo2Pct)
+    ha.max = Math.max(ha.max, i.spo2Pct)
+    ha.sum += i.spo2Pct
+    ha.count += 1
+    hourAgg.set(hk, ha)
+    const da = dayAgg.get(dk) || { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY, sum: 0, count: 0 }
+    da.min = Math.min(da.min, i.spo2Pct)
+    da.max = Math.max(da.max, i.spo2Pct)
+    da.sum += i.spo2Pct
+    da.count += 1
+    dayAgg.set(dk, da)
+  }
+  const hourRows = []
+  for (const [k, a] of hourAgg) {
+    const [pid, h] = k.split('|')
+    const avg = a.count ? a.sum / a.count : 0
+    hourRows.push({ patient_id: pid, hour_ts: h, spo2_min: a.min, spo2_max: a.max, spo2_avg: avg, spo2_count: a.count })
+  }
+  const dayRows = []
+  for (const [k, a] of dayAgg) {
+    const [pid, d] = k.split('|')
+    const avg = a.count ? a.sum / a.count : 0
+    dayRows.push({ patient_id: pid, date: d, spo2_min: a.min, spo2_max: a.max, spo2_avg: avg, spo2_count: a.count })
+  }
+  const uph = await supabase.from('spo2_hour').upsert(hourRows, { onConflict: 'patient_id,hour_ts' })
+  if (uph.error) {
+    console.error('spo2_hour upsert error', uph.error)
+    return res.status(400).json({ error: uph.error.message })
+  }
+  const upd = await supabase.from('spo2_day').upsert(dayRows, { onConflict: 'patient_id,date' })
+  if (upd.error) {
+    console.error('spo2_day upsert error', upd.error)
+    return res.status(400).json({ error: upd.error.message })
+  }
+  return res.status(200).json({ inserted: (ins.data || []).length, upserted_hour: hourRows.length, upserted_day: dayRows.length })
 })
-
-// --- START SERVER ---
 const port = process.env.PORT || 3001
 app.listen(port, () => process.stdout.write(`server:${port}\n`))
