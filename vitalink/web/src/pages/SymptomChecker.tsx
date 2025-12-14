@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+// Using standard div for scrolling to ensure reliability, ScrollArea can sometimes be finicky with dynamic heights
 import { Loader2, Send, Bot, User, AlertCircle, Sparkles } from "lucide-react";
 import { sendSymptomMessage } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -29,7 +29,6 @@ export default function SymptomChecker() {
             const userId = data?.session?.user?.id;
             if (userId) {
                 setPatientId(userId);
-                // Add welcome message
                 setMessages([{
                     id: '1',
                     role: 'assistant',
@@ -46,7 +45,6 @@ How can I help you today?`,
     }, []);
 
     useEffect(() => {
-        // Scroll to bottom when messages change
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
@@ -56,9 +54,7 @@ How can I help you today?`,
         if (e) e.preventDefault();
 
         if (!input.trim() || !patientId) {
-            if (!patientId) {
-                toast.error("Unable to identify user. Please log in again.");
-            }
+            if (!patientId) toast.error("Unable to identify user. Please log in again.");
             return;
         }
 
@@ -75,19 +71,15 @@ How can I help you today?`,
 
         try {
             const response = await sendSymptomMessage(userMessage.content, patientId);
-
             const assistantMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
                 content: response.response,
                 timestamp: response.timestamp
             };
-
             setMessages(prev => [...prev, assistantMessage]);
         } catch (err: any) {
             toast.error(err.message || "Failed to get response. Please try again.");
-
-            // Add error message to chat
             const errorMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
@@ -107,13 +99,9 @@ How can I help you today?`,
         "What are signs I should call my doctor?",
     ];
 
-    const handleSuggestedQuestion = (question: string) => {
-        setInput(question);
-    };
-
     return (
-        <main className="mx-auto max-w-5xl px-4 py-6">
-            <div className="mb-6">
+        <main className="mx-auto max-w-5xl px-4 py-6 h-screen max-h-screen flex flex-col">
+            <div className="mb-4 flex-shrink-0">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                     <Sparkles className="w-6 h-6 text-primary" />
                     AI Symptom Checker
@@ -123,115 +111,134 @@ How can I help you today?`,
                 </p>
             </div>
 
-            <Card className="h-[calc(100vh-240px)] flex flex-col">
-                <CardHeader className="border-b">
-                    <CardTitle className="flex items-center gap-2">
+            {/* Main Chat Card - Flex-1 ensures it fills available space but respects screen limits */}
+            <Card className="flex-1 flex flex-col min-h-0 overflow-hidden shadow-md">
+                <CardHeader className="border-b px-4 py-3 flex-shrink-0">
+                    <CardTitle className="flex items-center gap-2 text-lg">
                         <Bot className="w-5 h-5 text-primary" />
                         Chat with AI Assistant
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs">
                         Ask questions about your symptoms, vitals, or general health
                     </CardDescription>
                 </CardHeader>
 
-                <CardContent className="flex-1 flex flex-col p-0">
-                    {/* Messages Area */}
-                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                        <div className="space-y-4">
-                            {messages.map((message) => (
-                                <div
-                                    key={message.id}
-                                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    {message.role === 'assistant' && (
-                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                            <Bot className="w-5 h-5 text-primary" />
-                                        </div>
-                                    )}
+                {/* Content Area - Flex column to separate messages from input */}
+                <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden relative">
 
-                                    <div
-                                        className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user'
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'bg-muted'
-                                            }`}
-                                    >
-                                        <div className="text-sm markdown prose dark:prose-invert max-w-none break-words overflow-hidden [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
-                                            <Markdown>{message.content}</Markdown>
-                                        </div>
-                                        <p className="text-xs opacity-70 mt-1">
-                                            {new Date(message.timestamp).toLocaleTimeString()}
-                                        </p>
-                                    </div>
-
-                                    {message.role === 'user' && (
-                                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                            <User className="w-5 h-5 text-primary-foreground" />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-
-                            {loading && (
-                                <div className="flex gap-3 justify-start">
-                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    {/* Messages Container - Overflow Auto handles the scrolling */}
+                    <div
+                        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+                        ref={scrollRef}
+                    >
+                        {messages.map((message) => (
+                            <div
+                                key={message.id}
+                                className={`flex gap-3 w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                                {message.role === 'assistant' && (
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
                                         <Bot className="w-5 h-5 text-primary" />
                                     </div>
-                                    <div className="bg-muted rounded-lg p-3">
-                                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                )}
+
+                                <div
+                                    className={`relative max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${message.role === 'user'
+                                            ? 'bg-primary text-primary-foreground rounded-br-none'
+                                            : 'bg-muted/50 border rounded-bl-none'
+                                        }`}
+                                >
+                                    <div className="markdown prose prose-sm dark:prose-invert max-w-none break-words [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
+                                        <Markdown>{message.content}</Markdown>
                                     </div>
+                                    <p className={`text-[10px] mt-1 text-right ${message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                                        }`}>
+                                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
                                 </div>
-                            )}
-                        </div>
-                    </ScrollArea>
 
-                    {/* Suggested Questions (only show when no messages) */}
-                    {messages.length === 1 && (
-                        <div className="px-4 pb-4 border-t pt-4">
-                            <p className="text-sm text-muted-foreground mb-2">Suggested questions:</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {suggestedQuestions.map((question, idx) => (
-                                    <Button
-                                        key={idx}
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleSuggestedQuestion(question)}
-                                        className="text-left justify-start h-auto py-2 px-3"
-                                    >
-                                        <span className="text-xs">{question}</span>
-                                    </Button>
-                                ))}
+                                {message.role === 'user' && (
+                                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-1">
+                                        <User className="w-5 h-5 text-primary-foreground" />
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    )}
+                        ))}
 
-                    {/* Disclaimer */}
-                    <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border-t border-amber-200 dark:border-amber-900">
-                        <div className="flex items-start gap-2">
-                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-amber-800 dark:text-amber-200">
-                                This AI assistant provides general information only. Always consult your healthcare provider for medical advice.
-                            </p>
-                        </div>
+                        {loading && (
+                            <div className="flex gap-3 justify-start w-full animate-pulse">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                    <Bot className="w-5 h-5 text-primary" />
+                                </div>
+                                <div className="bg-muted rounded-2xl rounded-bl-none p-4 flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                    <span className="text-xs text-muted-foreground">Analyzing health data...</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Input Area */}
-                    <div className="p-4 border-t">
-                        <form onSubmit={handleSend} className="flex gap-2">
-                            <Input
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder="Type your question or describe your symptoms..."
-                                disabled={loading}
-                                className="flex-1"
-                            />
-                            <Button type="submit" disabled={loading || !input.trim()} size="icon">
-                                {loading ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <Send className="w-4 h-4" />
-                                )}
-                            </Button>
-                        </form>
+                    {/* Bottom Area: Suggestions + Disclaimer + Input */}
+                    <div className="flex-shrink-0 border-t bg-background z-10">
+
+                        {/* Suggested Questions (only if chat is empty/start) */}
+                        {messages.length === 1 && (
+                            <div className="px-4 pt-3 pb-1 bg-muted/20">
+                                <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Suggested questions:</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {suggestedQuestions.map((question, idx) => (
+                                        <Button
+                                            key={idx}
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                setInput(question);
+                                                // Optional: Auto send immediately
+                                                // handleSend(); 
+                                            }}
+                                            className="text-left justify-start h-auto py-2 px-3 whitespace-normal"
+                                        >
+                                            <span className="text-xs truncate w-full">{question}</span>
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Disclaimer Bar */}
+                        <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900/50 flex justify-center">
+                            <div className="flex items-center gap-1.5 text-center">
+                                <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-500 flex-shrink-0" />
+                                <p className="text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                                    AI provides info, not diagnosis. Consult a doctor for medical advice.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Input Form */}
+                        <div className="p-3 sm:p-4 bg-background">
+                            <form onSubmit={handleSend} className="flex gap-2 relative">
+                                <Input
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Type your symptoms..."
+                                    disabled={loading}
+                                    className="flex-1 pr-12 h-11" // extra padding for mobile ease
+                                />
+                                <Button
+                                    type="submit"
+                                    disabled={loading || !input.trim()}
+                                    size="icon"
+                                    className="absolute right-1 top-1 h-9 w-9 my-auto"
+                                >
+                                    {loading ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Send className="w-4 h-4" />
+                                    )}
+                                </Button>
+                            </form>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
