@@ -339,6 +339,22 @@ app.get('/api/debug/models', async (req, res) => {
   }
 })
 
+
+// --- DIAGNOSTIC ROUTE ---
+app.get('/api/debug/list-models', async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    // We use a raw fetch to bypass the SDK and ask Google directly
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await response.json();
+
+    // This will return a list of "name": "models/..."
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // AI Symptom Checker Route
 app.post('/api/chat/symptoms', async (req, res) => {
   try {
