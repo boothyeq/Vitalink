@@ -7,7 +7,7 @@ import { Loader2, Send, Bot, User, AlertCircle, Sparkles } from "lucide-react";
 import { sendSymptomMessage } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import Navigation from "@/components/Navigation";
+import Markdown from "react-markdown";
 
 type Message = {
     id: string;
@@ -155,7 +155,9 @@ How can I help you today?`,
                                             : 'bg-muted'
                                             }`}
                                     >
-                                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                        <div className="text-sm markdown prose dark:prose-invert max-w-none break-words overflow-hidden [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:list-disc [&>ul]:pl-4 [&>ol]:list-decimal [&>ol]:pl-4">
+                                            <Markdown>{message.content}</Markdown>
+                                        </div>
                                         <p className="text-xs opacity-70 mt-1">
                                             {new Date(message.timestamp).toLocaleTimeString()}
                                         </p>
