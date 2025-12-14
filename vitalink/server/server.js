@@ -348,9 +348,13 @@ app.get('/api/debug/list-models', async (req, res) => {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     const data = await response.json();
 
+    // Log to server console so user can see it in Render logs
+    console.log('[Diagnostic] Available Models:', JSON.stringify(data, null, 2));
+
     // This will return a list of "name": "models/..."
     res.json(data);
   } catch (error) {
+    console.error('[Diagnostic] Error listing models:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -374,7 +378,7 @@ app.post('/api/chat/symptoms', async (req, res) => {
     // Initialize Gemini AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-001",
+      model: "gemini-pro",
       systemInstruction: `You are a helpful medical assistant for Vitalink, a heart failure monitoring application. 
 
 CRITICAL DISCLAIMERS:
